@@ -15,6 +15,7 @@ module PreviewEnrichment
         myminifactory.com
         printables.com
         makerworld.com
+        thangs.com
       ].freeze
 
       def search

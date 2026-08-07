@@ -12,6 +12,12 @@ module PreviewEnrichment
         www.cults3d.com
         myminifactory.com
         www.myminifactory.com
+        makerworld.com
+        www.makerworld.com
+        printables.com
+        www.printables.com
+        thangs.com
+        www.thangs.com
       ].freeze
 
       MAX_REDIRECTS = 3
@@ -144,6 +150,12 @@ module PreviewEnrichment
           "cults3d"
         when "myminifactory.com", "www.myminifactory.com"
           "myminifactory"
+        when "makerworld.com", "www.makerworld.com"
+          "makerworld"
+        when "printables.com", "www.printables.com"
+          "printables"
+        when "thangs.com", "www.thangs.com"
+          "thangs"
         else
           "unknown"
         end

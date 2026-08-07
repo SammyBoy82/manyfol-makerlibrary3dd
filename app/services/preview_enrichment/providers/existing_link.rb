@@ -11,7 +11,16 @@ module PreviewEnrichment
         "www.cults3d.com" => "cults3d",
 
         "myminifactory.com" => "myminifactory",
-        "www.myminifactory.com" => "myminifactory"
+        "www.myminifactory.com" => "myminifactory",
+
+        "makerworld.com" => "makerworld",
+        "www.makerworld.com" => "makerworld",
+
+        "printables.com" => "printables",
+        "www.printables.com" => "printables",
+
+        "thangs.com" => "thangs",
+        "www.thangs.com" => "thangs"
       }.freeze
 
       def search

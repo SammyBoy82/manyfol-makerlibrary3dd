@@ -1,7 +1,8 @@
 module PreviewEnrichment
   class Discovery
     PROVIDERS = [
-      Providers::ExistingLink
+      Providers::ExistingLink,
+      Providers::SourcePageImage
     ].freeze
 
     def initialize(model)

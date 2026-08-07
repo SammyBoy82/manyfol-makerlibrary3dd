@@ -3,7 +3,8 @@ module PreviewEnrichment
     PROVIDERS = [
       Providers::ExistingLink,
       Providers::SourcePageImage,
-      Providers::BraveImageSearch
+      Providers::MakerworldSearch,
+      Providers::ThingiverseSearch
     ].freeze
 
     def initialize(model)

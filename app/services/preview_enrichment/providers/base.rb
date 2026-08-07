@@ -1,7 +1,7 @@
 module PreviewEnrichment
   module Providers
     class Base
-      Candidate = Struct.new(
+      Candidate = Data.define(
         :provider,
         :source_page_url,
         :image_url,
@@ -10,8 +10,7 @@ module PreviewEnrichment
         :license,
         :confidence,
         :match_method,
-        :metadata,
-        keyword_init: true
+        :metadata
       )
 
       def initialize(model)

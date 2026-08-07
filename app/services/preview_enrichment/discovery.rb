@@ -9,11 +9,13 @@ module PreviewEnrichment
     end
 
     def call
-      return [] unless Eligibility.new(model).eligible?
+      eligibility = Eligibility.new(model)
+
+      return [] unless eligibility.eligible?
 
       PROVIDERS.flat_map do |provider_class|
         provider_class.new(model).search
-      rescue => error
+      rescue StandardError => error
         Rails.logger.error(
           {
             event: "preview_enrichment_provider_failed",

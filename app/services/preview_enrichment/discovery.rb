@@ -3,6 +3,7 @@ module PreviewEnrichment
     PROVIDERS = [
       Providers::ExistingLink,
       Providers::SourcePageImage,
+      Providers::CultsSearch,
       Providers::MakerworldSearch,
       Providers::ThingiverseSearch
     ].freeze

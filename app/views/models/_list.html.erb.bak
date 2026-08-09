@@ -1,0 +1,46 @@
+<% content_for :items do %>
+  <%= turbo_stream_from Model.model_name.plural %>
+
+  <% if @models.empty? %>
+    <div class="alert alert-info">
+      <%= Icon icon: "person-arms-up", label: "" %>
+      <%= signed_in? ? t(".no_results_html") : t(".no_results_signed_out_html", link: new_user_session_path) %>
+      <% if @search %>
+        <%= t ".search.or_other_sites" %>
+        <%= render "search_links" %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="skip-link-container">
+      <div class="row">
+        <%= skip_link "sidebar", t(".skip_models") %>
+        <div class="col">
+          <%= paginate @models %>
+        </div>
+        <div class="col col-auto">
+          <%= SortMenu(filter: @filter) %>
+        </div>
+      </div>
+      <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 mb-4">
+        <%= render_component_collection Components::ModelCard, :model, @models %>
+      </div>
+      <%= paginate @models %>
+      <% if @search %>
+        <div class="alert alert-info">
+          <%= Icon icon: "search", label: "" %>
+          <%= t ".search.other_sites" %>
+          <%= render "search_links" %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>
+
+<% content_for :actions do %>
+  <%= link_to t(".bulk_edit"), edit_models_path((@additional_filters || {}).merge(@filter&.to_params)), class: "btn btn-secondary" if policy(:model).edit? %>
+<% end %>
+
+<% content_for :sidebar do %>
+  <%= render "filters_card" %>
+  <%= render "tags_card" %>
+<% end %>

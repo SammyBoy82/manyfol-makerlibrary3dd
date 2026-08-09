@@ -11,6 +11,16 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     end
     resources :libraries, only: [:index]
     resources :plugins, only: [:index, :create]
+
+    resources :preview_enrichment_candidates,
+      path: "preview_enrichment",
+      only: [:index] do
+      member do
+        get :image
+        patch :approve
+        patch :reject
+      end
+    end
   end
   mount Sidekiq::Web => "/admin/sidekiq"
   mount RailsPerformance::Engine => "/admin/performance" unless Rails.env.test? || ENV["RAILS_ASSETS_PRECOMPILE"].present?

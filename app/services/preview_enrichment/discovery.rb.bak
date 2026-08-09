@@ -7,6 +7,7 @@ module PreviewEnrichment
       Providers::ThangsSearch,
       Providers::PrintablesSearch,
       Providers::MyMinifactorySearch,
+      Providers::ThingiverseSearch
     ].freeze
 
     def initialize(model)

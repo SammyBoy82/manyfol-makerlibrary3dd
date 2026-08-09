@@ -19,12 +19,14 @@ class Components::ModelCard < Components::Base
   end
 
   def view_template
-    div class: "col mb-3" do
+    div class: "ml3d-model-grid-item" do
       turbo_stream_from @model
-      div class: "card preview-card" do
+      div class: "card preview-card h-100 ml3d-model-card" do
         div(class: "card-header position-absolute w-100 top-0 z-3 bg-body-secondary text-secondary-emphasis opacity-75") { server_indicator @model } if @model.remote?
-        PreviewFrame(object: @model)
-        div(class: "card-body") { info_row }
+        div(class: "ml3d-model-preview") do
+          PreviewFrame(object: @model)
+        end
+        div(class: "card-body px-2 py-2") { info_row }
         actions
       end
     end
@@ -33,7 +35,7 @@ class Components::ModelCard < Components::Base
   private
 
   def title
-    div class: "card-title" do
+    div class: "card-title small fw-semibold mb-1 text-truncate" do
       @editable ? EditableSpan(fieldname: "model[name]", path: model_path(@model), text: @model.name) : span { @model.name }
       if @model.sensitive
         whitespace
@@ -91,15 +93,15 @@ class Components::ModelCard < Components::Base
 
   def caption
     if (summary = @model.try(:caption) || @actor.extensions&.dig("summary"))
-      span class: "card-subtitle text-muted" do
+      span class: "card-subtitle text-muted small" do
         sanitize summary.split("</p>", 2).first
       end
     end
   end
 
   def info_row
-    div class: "row" do
-      div class: "col" do
+    div class: "row g-1" do
+      div class: "col overflow-hidden" do
         title
         caption
       end
@@ -112,8 +114,8 @@ class Components::ModelCard < Components::Base
   end
 
   def actions
-    div class: "card-footer" do
-      div class: "row" do
+    div class: "card-footer px-2 py-2" do
+      div class: "row g-1 align-items-center" do
         div class: "col" do
           open_button
           whitespace

@@ -1,4 +1,5 @@
 require "digest"
+require "uri"
 
 module PreviewEnrichment
   class CandidatePersister

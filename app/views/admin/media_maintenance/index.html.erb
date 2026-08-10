@@ -1,0 +1,103 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Media & Render Maintenance</h1>
+      <p class="text-muted mb-0">
+        Library-level persistent preview health and repair tools.
+      </p>
+    </div>
+  </div>
+
+  <% if notice.present? %>
+    <div class="alert alert-success">
+      <%= notice %>
+    </div>
+  <% end %>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Library</th>
+          <th>3D Files</th>
+          <th>Healthy</th>
+          <th>Stale</th>
+          <th>Orphan</th>
+          <th>Missing Render</th>
+          <th>Missing Source</th>
+          <th>Unsupported</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% @health.each do |health| %>
+          <tr>
+            <td>
+              <strong><%= health.library.name %></strong>
+            </td>
+
+            <td><%= health.total_3d %></td>
+
+            <td>
+              <span class="badge bg-success">
+                <%= health.healthy %>
+              </span>
+            </td>
+
+            <td>
+              <span class="badge bg-warning text-dark">
+                <%= health.stale_metadata %>
+              </span>
+            </td>
+
+            <td>
+              <span class="badge bg-info text-dark">
+                <%= health.orphan_render %>
+              </span>
+            </td>
+
+            <td>
+              <span class="badge bg-danger">
+                <%= health.missing_renderable %>
+              </span>
+            </td>
+
+            <td>
+              <span class="badge bg-secondary">
+                <%= health.missing_source %>
+              </span>
+            </td>
+
+            <td>
+              <% if health.unsupported.any? %>
+                <% health.unsupported.sort.each do |ext, count| %>
+                  <span class="badge bg-light text-dark border">
+                    <%= ext.upcase %>: <%= count %>
+                  </span>
+                <% end %>
+              <% else %>
+                -
+              <% end %>
+            </td>
+
+            <td>
+              <%= button_to(
+                    "Generate Missing",
+                    admin_media_maintenance_regenerate_missing_path(
+                      health.library.id
+                    ),
+                    method: :post,
+                    class: "btn btn-sm btn-primary",
+                    data: {
+                      turbo_confirm:
+                        "Queue all missing renderable files in #{health.library.name}?"
+                    }
+                  ) %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

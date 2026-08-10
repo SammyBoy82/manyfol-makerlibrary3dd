@@ -15,6 +15,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     resources :preview_enrichment_candidates,
       path: "preview_enrichment",
       only: [:index] do
+      collection do
+        post :scan
+      end
+
       member do
         get :image
         patch :approve

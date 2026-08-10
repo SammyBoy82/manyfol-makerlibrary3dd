@@ -14,6 +14,7 @@ module Admin
 
     def missing_sources
       skip_policy_scope
+      skip_authorization
 
       @library = Library.find(params[:library_id])
       @rows = []

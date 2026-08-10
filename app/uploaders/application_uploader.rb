@@ -130,7 +130,7 @@ class ApplicationUploader < Shrine
         magick = ImageProcessing::MiniMagick.source(it)
         {
           preview: magick.resize_to_limit!(320, 320),
-          carousel: magick.resize_to_limit!(1024, 768)
+          carousel: magick.resize_to_limit!(1600, 1200)
         }
       end
     elsif SiteSettings.generate_model_renders && FileHandlers::GcodeThumbnailExtractor.can_load?(context[:record].mime_type)
@@ -162,10 +162,58 @@ class ApplicationUploader < Shrine
             z: "0,-1,0"
           }[plane]
         end
-        output, _err = Open3.capture3("f3d", it.path, *options.map { |k, v| "--#{k}=#{v}" })
-        {
-          render: (output.length > 0) ? StringIO.new(output) : nil
-        }.compact
+        output, err, status =
+          Open3.capture3(
+            "f3d",
+            it.path,
+            *options.map { |k, v| "--#{k}=#{v}" }
+          )
+
+        if status.success? && !output.empty?
+          # F3D writes PNG bytes to stdout. This is binary data,
+          # not UTF-8 text, so never call present?/blank? on it.
+          #
+          # Force binary encoding before handing it to Shrine.
+          output = output.b
+
+          io = StringIO.new(output)
+          io.binmode
+
+          {
+            render: io
+          }
+
+        elsif context[:record].extension.to_s.downcase == "3mf"
+          Rails.logger.warn(
+            {
+              event: "f3d_render_failed_using_3mf_fallback",
+              model_file_id: context[:record].id,
+              filename: context[:record].filename,
+              exit_code: status.exitstatus,
+              stderr: err.to_s.last(4000)
+            }.to_json
+          )
+
+          fallback =
+            PreviewRendering::ThreeMfEmbeddedPreview
+              .new(it.path)
+              .call
+
+          fallback ? {render: fallback} : {}
+
+        else
+          Rails.logger.warn(
+            {
+              event: "f3d_render_failed",
+              model_file_id: context[:record].id,
+              filename: context[:record].filename,
+              exit_code: status.exitstatus,
+              stderr: err.to_s.last(4000)
+            }.to_json
+          )
+
+          {}
+        end
       end
     else
       {}

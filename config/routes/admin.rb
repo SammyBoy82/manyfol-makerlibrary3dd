@@ -31,6 +31,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance
 
+  get "/admin/media-maintenance/:library_id/missing-sources",
+    to: "admin/media_maintenance#missing_sources",
+    as: :admin_media_maintenance_missing_sources
+
   post "/admin/media-maintenance/:library_id/regenerate-missing",
     to: "admin/media_maintenance#regenerate_missing",
     as: :admin_media_maintenance_regenerate_missing

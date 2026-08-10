@@ -64,9 +64,19 @@
             </td>
 
             <td>
-              <span class="badge bg-secondary">
-                <%= health.missing_source %>
-              </span>
+              <% if health.missing_source.to_i > 0 %>
+                <%= link_to(
+                      health.missing_source,
+                      admin_media_maintenance_missing_sources_path(
+                        health.library.id
+                      ),
+                      class: "badge bg-secondary text-decoration-none"
+                    ) %>
+              <% else %>
+                <span class="badge bg-secondary">
+                  0
+                </span>
+              <% end %>
             </td>
 
             <td>

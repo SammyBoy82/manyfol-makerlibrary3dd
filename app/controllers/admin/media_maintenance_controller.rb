@@ -12,6 +12,46 @@ module Admin
         end
     end
 
+    def missing_sources
+      skip_policy_scope
+
+      @library = Library.find(params[:library_id])
+      @rows = []
+
+      @library.models.find_each do |model|
+        model.model_files.each do |file|
+          next unless file.is_3d_model?
+
+          source_exists =
+            begin
+              file.exists_on_storage?
+            rescue
+              false
+            end
+
+          next if source_exists
+
+          @rows << {
+            id: file.id,
+            model_id: model.id,
+            model_name: model.name,
+            filename: file.filename,
+            extension: file.extension.to_s.downcase,
+            storage_key: file.attachment.storage_key.to_s,
+            attachment_id: file.attachment.id,
+            library_relative_path: file.attachment.id
+          }
+        end
+      end
+
+      @rows.sort_by! do |row|
+        [
+          row[:model_name].to_s.downcase,
+          row[:filename].to_s.downcase
+        ]
+      end
+    end
+
     def regenerate_missing
       skip_authorization
 
@@ -52,7 +92,6 @@ module Admin
           next if file.has_render? && physical
 
           PreviewRendering::EnsureRenderJob.perform_later(file.id)
-
           queued += 1
         end
       end

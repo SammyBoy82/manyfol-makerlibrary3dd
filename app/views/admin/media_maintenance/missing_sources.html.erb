@@ -1,0 +1,76 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">
+        Missing Source Files
+      </h1>
+
+      <p class="text-muted mb-0">
+        <strong><%= @library.name %></strong>
+        —
+        <%= @rows.length %> database record(s) whose source file is not currently available.
+      </p>
+    </div>
+
+    <div>
+      <%= link_to(
+            "Back to Media Maintenance",
+            admin_media_maintenance_path,
+            class: "btn btn-outline-secondary"
+          ) %>
+    </div>
+  </div>
+
+  <% if @rows.empty? %>
+    <div class="alert alert-success">
+      No missing source files found for this library.
+    </div>
+  <% else %>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Model</th>
+            <th>Filename</th>
+            <th>Type</th>
+            <th>Storage</th>
+            <th>Library-relative path</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% @rows.each do |row| %>
+            <tr>
+              <td>
+                <code><%= row[:id] %></code>
+              </td>
+
+              <td>
+                <strong><%= row[:model_name] %></strong>
+              </td>
+
+              <td>
+                <%= row[:filename] %>
+              </td>
+
+              <td>
+                <span class="badge bg-light text-dark border">
+                  <%= row[:extension].upcase %>
+                </span>
+              </td>
+
+              <td>
+                <code><%= row[:storage_key] %></code>
+              </td>
+
+              <td style="max-width: 700px; word-break: break-all;">
+                <code><%= row[:library_relative_path] %></code>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+</div>

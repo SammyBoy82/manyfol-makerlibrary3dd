@@ -4,6 +4,8 @@ module Admin
     before_action :require_administrator!
 
     def index
+      skip_policy_scope
+
       @health =
         Library.order(:name).map do |library|
           MediaMaintenance::LibraryHealth.call(library)
@@ -11,6 +13,8 @@ module Admin
     end
 
     def regenerate_missing
+      skip_authorization
+
       library = Library.find(params[:library_id])
 
       queued = 0

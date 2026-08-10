@@ -12,6 +12,14 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     resources :libraries, only: [:index]
     resources :plugins, only: [:index, :create]
 
+  get "/admin/media-maintenance",
+    to: "admin/media_maintenance#index",
+    as: :admin_media_maintenance
+
+  post "/admin/media-maintenance/:library_id/regenerate-missing",
+    to: "admin/media_maintenance#regenerate_missing",
+    as: :admin_media_maintenance_regenerate_missing
+
     resources :preview_enrichment_candidates,
       path: "preview_enrichment",
       only: [:index] do

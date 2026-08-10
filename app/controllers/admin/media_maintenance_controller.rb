@@ -1,7 +1,7 @@
 module Admin
   class MediaMaintenanceController < ApplicationController
     before_action :authenticate_user!
-    before_action :require_admin!
+    before_action :require_administrator!
 
     def index
       @health =
@@ -11,15 +11,18 @@ module Admin
     end
 
     def regenerate_missing
-      library =
-        Library.find(params[:library_id])
+      library = Library.find(params[:library_id])
 
       queued = 0
 
       library.models.find_each do |model|
         model.model_files.each do |file|
           next unless file.is_3d_model?
-          next unless %w[stl obj 3mf].include?(file.extension.to_s.downcase)
+
+          extension =
+            file.extension.to_s.downcase
+
+          next unless %w[stl obj 3mf].include?(extension)
 
           source_exists =
             begin
@@ -45,6 +48,7 @@ module Admin
           next if file.has_render? && physical
 
           PreviewRendering::EnsureRenderJob.perform_later(file.id)
+
           queued += 1
         end
       end
@@ -57,8 +61,8 @@ module Admin
 
     private
 
-    def require_admin!
-      return if current_user&.admin?
+    def require_administrator!
+      return if current_user&.is_administrator?
 
       head :forbidden
     end

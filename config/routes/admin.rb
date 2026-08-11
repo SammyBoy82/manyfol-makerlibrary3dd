@@ -81,6 +81,11 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     as: :admin_integrity_preview,
     constraints: {category: /missing|duplicate|nesting/}
 
+  post "/admin/integrity/preview/:category/clear-stale",
+    to: "admin/integrity#clear_stale",
+    as: :admin_integrity_clear_stale,
+    constraints: {category: /missing|duplicate|nesting/}
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

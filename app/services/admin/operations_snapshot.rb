@@ -164,16 +164,31 @@ module Admin
 
     def disk_status(path)
       stdout, status = Open3.capture2("df", "-Pk", path.to_s)
-      return {total: 0, available: 0, used_percent: 0.0} unless status.success?
+      return {total: 0, available: 0, used_percent: 0.0, device: nil, mountpoint: nil} unless status.success?
 
       fields = stdout.lines.last.to_s.split
       total = fields[1].to_i * 1024
       available = fields[3].to_i * 1024
       used_percent = fields[4].to_s.delete("%").to_f
 
-      {total: total, available: available, used_percent: used_percent}
+      {
+        total: total,
+        available: available,
+        used_percent: used_percent,
+        device: fields[0],
+        mountpoint: fields[5]
+      }
     rescue
-      {total: 0, available: 0, used_percent: 0.0}
+      {total: 0, available: 0, used_percent: 0.0, device: nil, mountpoint: nil}
+    end
+
+    def directory_size(path)
+      stdout, status = Open3.capture2("du", "-sk", "--", path.to_s)
+      return 0 unless status.success?
+
+      stdout.to_s.split.first.to_i * 1024
+    rescue
+      0
     end
 
     def container_status
@@ -262,21 +277,20 @@ module Admin
     def library_storage_status
       Library.all.map do |library|
         if library.storage_service == "filesystem"
-          stat = Sys::Filesystem.stat(library.path)
-          total = stat.block_size * stat.blocks
-          available = stat.bytes_available
-          used = [total - available, 0].max
-          used_percent = total.positive? ? ((used.to_f / total) * 100).round(1) : 0.0
+          volume = disk_status(library.path)
+          folder_bytes = directory_size(library.path)
 
           {
             id: library.id,
             name: library.name,
             service: library.storage_service,
             path: library.path,
-            total: total,
-            available: available,
-            used: used,
-            used_percent: used_percent,
+            directory_bytes: folder_bytes,
+            device: volume[:device],
+            mountpoint: volume[:mountpoint],
+            total: volume[:total],
+            available: volume[:available],
+            used_percent: volume[:used_percent],
             models: library.models.count,
             files: library.model_files.count
           }
@@ -286,9 +300,11 @@ module Admin
             name: library.name,
             service: library.storage_service,
             path: library.path,
+            directory_bytes: nil,
+            device: nil,
+            mountpoint: nil,
             total: nil,
             available: library.free_space,
-            used: nil,
             used_percent: nil,
             models: library.models.count,
             files: library.model_files.count

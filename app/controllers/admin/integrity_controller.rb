@@ -56,6 +56,33 @@ module Admin
       redirect_to admin_integrity_preview_path("missing"), notice: message
     end
 
+    def remove_duplicates
+      skip_authorization
+
+      canonical_id = params[:canonical_id]
+      remove_ids = params[:remove_ids]
+
+      if canonical_id.blank? || remove_ids.blank?
+        redirect_to admin_integrity_duplicate_sets_path,
+          alert: "Select one canonical copy and at least one same-model duplicate to remove."
+        return
+      end
+
+      result = Admin::DuplicateRecordRemover.call(
+        canonical_id: canonical_id,
+        remove_ids: remove_ids
+      )
+
+      message = "Canonical ModelFile ##{result.canonical_id}: requested #{result.requested}; removed #{result.removed} verified same-model duplicate(s); skipped #{result.skipped}."
+      message += " Moved #{result.preview_refs_moved} preview reference(s)." if result.preview_refs_moved.positive?
+      message += " Moved #{result.entrypoint_refs_moved} entrypoint reference(s)." if result.entrypoint_refs_moved.positive?
+      message += " #{result.errors.size} error(s) were left untouched." if result.errors.any?
+
+      redirect_to admin_integrity_duplicate_sets_path, notice: message
+    rescue ArgumentError => error
+      redirect_to admin_integrity_duplicate_sets_path, alert: error.message
+    end
+
     private
 
     def require_administrator!

@@ -86,6 +86,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     as: :admin_integrity_clear_stale,
     constraints: {category: /missing|duplicate|nesting/}
 
+  post "/admin/integrity/missing/remove-records",
+    to: "admin/integrity#remove_missing_records",
+    as: :admin_integrity_remove_missing_records
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

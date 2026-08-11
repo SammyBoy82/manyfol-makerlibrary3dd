@@ -2,7 +2,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h1 class="h3 mb-1"><%= @preview.category.humanize %> Repair Preview</h1>
-      <p class="text-muted mb-0">Repair planning with a tightly scoped safe action for verified stale problem flags only.</p>
+      <p class="text-muted mb-0">Repair planning with tightly scoped, server-side revalidated actions.</p>
       <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@preview.generated_at) %> ago</div>
     </div>
     <div class="d-flex gap-2">
@@ -15,8 +15,8 @@
 
   <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-3">
     <div>
-      <strong>Phase 4.3 safe Apply:</strong>
-      only verified stale problem records can be cleared. No files, paths, models, or metadata are deleted, moved, renamed, or merged.
+      <strong>Safe stale cleanup:</strong>
+      verified stale problem records can be cleared without deleting, moving, renaming, or merging files.
     </div>
     <% if stale_count.positive? %>
       <%= button_to "Clear #{stale_count} Verified Stale Flag#{'s' unless stale_count == 1}",
@@ -28,6 +28,13 @@
       <button class="btn btn-outline-secondary" disabled>No verified stale flags</button>
     <% end %>
   </div>
+
+  <% if @preview.category == "missing" %>
+    <div class="alert alert-warning">
+      <strong>Confirmed missing database cleanup is enabled selectively.</strong>
+      Checked rows will be revalidated against storage at execution time. If the source is still absent, only the ModelFile database record is removed. Existing source files are never deleted. Preview/entrypoint references are cleared first if necessary.
+    </div>
+  <% end %>
 
   <div class="row g-3 mb-4">
     <div class="col-md-3">
@@ -46,106 +53,137 @@
     <% end %>
   </div>
 
-  <div class="card">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-striped table-hover align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Problem</th>
-              <th>Object</th>
-              <th>Library / Path</th>
-              <th>Assessment</th>
-              <th>Proposed Impact</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% @preview.rows.each do |row| %>
+  <% form_url = @preview.category == "missing" ? admin_integrity_remove_missing_records_path : nil %>
+  <%= form_with url: form_url || admin_integrity_path, method: :post, local: true, id: "integrity-apply-form" do %>
+    <% if @preview.category == "missing" %>
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="select-all-confirmed-missing">Select all shown confirmed missing</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="clear-selection">Clear selection</button>
+        <%= submit_tag "Remove Selected Missing DB Records",
+              class: "btn btn-sm btn-danger",
+              data: {turbo_confirm: "Remove the selected database records only if their source files are still confirmed missing? Existing files will not be deleted."} %>
+        <span class="small text-muted">Maximum 250 selected records per operation.</span>
+      </div>
+    <% end %>
+
+    <div class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle mb-0">
+            <thead>
               <tr>
-                <td>
-                  <code>#<%= row[:problem_id] %></code>
-                  <div class="small text-muted"><%= row[:problematic_type] %> #<%= row[:problematic_id] %></div>
-                </td>
-                <td style="min-width: 260px;">
-                  <div><strong><%= row[:label] %></strong></div>
-                  <% if row[:size] %><div class="small text-muted"><%= number_to_human_size(row[:size]) %></div><% end %>
-                  <% if row[:digest].present? %><div class="small text-muted"><code><%= row[:digest].to_s.first(16) %>…</code></div><% end %>
-                  <% if row[:error].present? %><div class="small text-danger"><%= row[:error] %></div><% end %>
-                </td>
-                <td style="max-width: 500px;">
-                  <div><%= row[:library].presence || "-" %></div>
-                  <code class="text-break"><%= row[:path].presence || row[:model_path].presence || "-" %></code>
-                </td>
-                <td style="min-width: 280px;">
-                  <% state_class = case row[:state]
-                    when :confirmed_missing then "bg-danger"
-                    when :duplicate_set, :structural_conflict then "bg-warning text-dark"
-                    when :stale_problem then "bg-info text-dark"
-                    when :orphan_problem then "bg-secondary"
-                    when :error then "bg-danger"
-                    else "bg-secondary"
-                  end %>
-                  <span class="badge <%= state_class %>"><%= row[:state].to_s.humanize %></span>
-                  <% if [:stale_problem, :orphan_problem].include?(row[:state]) %>
-                    <span class="badge bg-success">Safe cleanup eligible</span>
-                  <% end %>
-                  <div class="mt-2"><strong><%= row[:recommendation] %></strong></div>
-
-                  <% if row[:storage_exists] == true %>
-                    <div class="small mt-1"><span class="badge bg-success">Storage exists</span></div>
-                  <% elsif row[:storage_exists] == false %>
-                    <div class="small mt-1"><span class="badge bg-danger">Storage missing</span></div>
-                  <% end %>
-
-                  <% if row[:duplicate_candidates].present? %>
-                    <div class="small text-muted mt-2">Duplicate candidates: <%= row[:duplicate_count] %></div>
-                    <ul class="small mb-0 ps-3">
-                      <% row[:duplicate_candidates].first(5).each do |candidate| %>
-                        <li>
-                          <code><%= candidate[:path] %></code>
-                          <% if candidate[:same_model] %><span class="badge bg-info text-dark">same model</span><% end %>
-                        </li>
-                      <% end %>
-                    </ul>
-                  <% end %>
-
-                  <% if row[:parent_models].present? %>
-                    <div class="small text-muted mt-2">Parent models:</div>
-                    <ul class="small mb-0 ps-3">
-                      <% row[:parent_models].each do |parent| %>
-                        <li><%= parent[:name] %> — <code><%= parent[:path] %></code></li>
-                      <% end %>
-                    </ul>
-                  <% end %>
-
-                  <% if row[:nested_models].present? %>
-                    <div class="small text-muted mt-2">Nested models:</div>
-                    <ul class="small mb-0 ps-3">
-                      <% row[:nested_models].first(10).each do |child| %>
-                        <li><%= child[:name] %> — <code><%= child[:path] %></code> · <%= child[:files] %> file(s)</li>
-                      <% end %>
-                    </ul>
-                  <% end %>
-                </td>
-                <td style="min-width: 300px;">
-                  <%= row[:impact] %>
-                  <div class="mt-2">
-                    <% if [:stale_problem, :orphan_problem].include?(row[:state]) %>
-                      <span class="badge bg-success">Problem flag only</span>
-                    <% else %>
-                      <button class="btn btn-sm btn-outline-secondary" disabled>Destructive Apply disabled</button>
-                    <% end %>
-                  </div>
-                </td>
+                <% if @preview.category == "missing" %><th style="width: 45px;">Select</th><% end %>
+                <th>Problem</th>
+                <th>Object</th>
+                <th>Library / Path</th>
+                <th>Assessment</th>
+                <th>Proposed Impact</th>
               </tr>
-            <% end %>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              <% @preview.rows.each do |row| %>
+                <tr>
+                  <% if @preview.category == "missing" %>
+                    <td>
+                      <% if row[:state] == :confirmed_missing %>
+                        <%= check_box_tag "problem_ids[]", row[:problem_id], false, class: "confirmed-missing-checkbox", aria: {label: "Select problem #{row[:problem_id]}"} %>
+                      <% else %>
+                        <span class="text-muted">—</span>
+                      <% end %>
+                    </td>
+                  <% end %>
+                  <td>
+                    <code>#<%= row[:problem_id] %></code>
+                    <div class="small text-muted"><%= row[:problematic_type] %> #<%= row[:problematic_id] %></div>
+                  </td>
+                  <td style="min-width: 260px;">
+                    <div><strong><%= row[:label] %></strong></div>
+                    <% if row[:size] %><div class="small text-muted"><%= number_to_human_size(row[:size]) %></div><% end %>
+                    <% if row[:digest].present? %><div class="small text-muted"><code><%= row[:digest].to_s.first(16) %>…</code></div><% end %>
+                    <% if row[:error].present? %><div class="small text-danger"><%= row[:error] %></div><% end %>
+                  </td>
+                  <td style="max-width: 500px;">
+                    <div><%= row[:library].presence || "-" %></div>
+                    <code class="text-break"><%= row[:path].presence || row[:model_path].presence || "-" %></code>
+                  </td>
+                  <td style="min-width: 280px;">
+                    <% state_class = case row[:state]
+                      when :confirmed_missing then "bg-danger"
+                      when :duplicate_set, :structural_conflict then "bg-warning text-dark"
+                      when :stale_problem then "bg-info text-dark"
+                      when :orphan_problem then "bg-secondary"
+                      when :error then "bg-danger"
+                      else "bg-secondary"
+                    end %>
+                    <span class="badge <%= state_class %>"><%= row[:state].to_s.humanize %></span>
+                    <% if [:stale_problem, :orphan_problem].include?(row[:state]) %>
+                      <span class="badge bg-success">Safe cleanup eligible</span>
+                    <% end %>
+                    <div class="mt-2"><strong><%= row[:recommendation] %></strong></div>
+
+                    <% if row[:storage_exists] == true %>
+                      <div class="small mt-1"><span class="badge bg-success">Storage exists</span></div>
+                    <% elsif row[:storage_exists] == false %>
+                      <div class="small mt-1"><span class="badge bg-danger">Storage missing</span></div>
+                    <% end %>
+
+                    <% if row[:duplicate_candidates].present? %>
+                      <div class="small text-muted mt-2">Duplicate candidates: <%= row[:duplicate_count] %></div>
+                      <ul class="small mb-0 ps-3">
+                        <% row[:duplicate_candidates].first(5).each do |candidate| %>
+                          <li><code><%= candidate[:path] %></code> <% if candidate[:same_model] %><span class="badge bg-info text-dark">same model</span><% end %></li>
+                        <% end %>
+                      </ul>
+                    <% end %>
+
+                    <% if row[:parent_models].present? %>
+                      <div class="small text-muted mt-2">Parent models:</div>
+                      <ul class="small mb-0 ps-3">
+                        <% row[:parent_models].each do |parent| %><li><%= parent[:name] %> — <code><%= parent[:path] %></code></li><% end %>
+                      </ul>
+                    <% end %>
+
+                    <% if row[:nested_models].present? %>
+                      <div class="small text-muted mt-2">Nested models:</div>
+                      <ul class="small mb-0 ps-3">
+                        <% row[:nested_models].first(10).each do |child| %><li><%= child[:name] %> — <code><%= child[:path] %></code> · <%= child[:files] %> file(s)</li><% end %>
+                      </ul>
+                    <% end %>
+                  </td>
+                  <td style="min-width: 300px;">
+                    <%= row[:impact] %>
+                    <div class="mt-2">
+                      <% if [:stale_problem, :orphan_problem].include?(row[:state]) %>
+                        <span class="badge bg-success">Problem flag only</span>
+                      <% elsif @preview.category == "missing" && row[:state] == :confirmed_missing %>
+                        <span class="badge bg-warning text-dark">DB record only after revalidation</span>
+                      <% else %>
+                        <button class="btn btn-sm btn-outline-secondary" disabled>Destructive Apply disabled</button>
+                      <% end %>
+                    </div>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
+  <% end %>
 
   <% if @preview.total > @preview.rows.size %>
     <div class="small text-muted mt-2">Showing <%= @preview.rows.size %> of <%= @preview.total %> problems.</div>
   <% end %>
 </div>
+
+<% if @preview.category == "missing" %>
+  <script>
+    (() => {
+      const selectAll = document.getElementById("select-all-confirmed-missing");
+      const clear = document.getElementById("clear-selection");
+      const boxes = () => document.querySelectorAll(".confirmed-missing-checkbox");
+      if (selectAll) selectAll.addEventListener("click", () => boxes().forEach(box => box.checked = true));
+      if (clear) clear.addEventListener("click", () => boxes().forEach(box => box.checked = false));
+    })();
+  </script>
+<% end %>

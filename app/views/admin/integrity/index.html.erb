@@ -1,0 +1,103 @@
+<meta http-equiv="refresh" content="60">
+
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Library Integrity Analyzer</h1>
+      <p class="text-muted mb-0">Read-only analysis of current Manyfold problem records. No files or database records are changed from this page.</p>
+      <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@report.generated_at) %> ago · Auto-refresh every 60 seconds</div>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Control Center", admin_operations_control_center_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    Phase 4 workflow: <strong>Analyze → Preview → Apply</strong>. This first release implements Analyze only.
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Open Problems</div><div class="display-6"><%= @report.total %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Categories</div><div class="display-6"><%= @report.groups.size %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">High-Risk Groups</div><div class="display-6"><%= @report.groups.count { |g| g[:risk] == :danger } %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Structural Groups</div><div class="display-6"><%= @report.groups.count { |g| g[:mode] == :structural } %></div></div></div></div>
+  </div>
+
+  <% @report.groups.each do |group| %>
+    <div class="card mb-4">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong><%= group[:category].humanize %></strong>
+          <span class="badge bg-secondary ms-2"><%= group[:count] %></span>
+        </div>
+        <div class="d-flex gap-2">
+          <% badge_class = case group[:risk]
+            when :danger then "bg-danger"
+            when :warning then "bg-warning text-dark"
+            when :info then "bg-info text-dark"
+            else "bg-secondary"
+          end %>
+          <span class="badge <%= badge_class %>"><%= group[:risk].to_s.humanize %></span>
+          <span class="badge bg-light text-dark border"><%= group[:mode].to_s.humanize %></span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="mb-3">
+          <div class="small text-muted">Proposed next-stage operation</div>
+          <strong><%= group[:proposed_action] %></strong>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Problem</th>
+                <th>Object</th>
+                <th>Library</th>
+                <th>Path</th>
+                <th>Size</th>
+                <th>Storage</th>
+                <th>Detected</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if group[:samples].any? %>
+                <% group[:samples].each do |sample| %>
+                  <tr>
+                    <td><code>#<%= sample[:id] %></code></td>
+                    <td>
+                      <div><%= sample[:label] %></div>
+                      <div class="small text-muted"><%= sample[:problematic_type] %> #<%= sample[:problematic_id] %></div>
+                      <% if sample[:error].present? %><div class="small text-danger"><%= sample[:error] %></div><% end %>
+                    </td>
+                    <td><%= sample[:library].presence || "-" %></td>
+                    <td style="max-width: 500px;"><code class="text-break"><%= sample[:path].presence || "-" %></code></td>
+                    <td><%= sample[:size].nil? ? "-" : number_to_human_size(sample[:size]) %></td>
+                    <td>
+                      <% if sample[:storage_exists] == true %>
+                        <span class="badge bg-success">Exists</span>
+                      <% elsif sample[:storage_exists] == false %>
+                        <span class="badge bg-danger">Missing</span>
+                      <% else %>
+                        <span class="badge bg-secondary">N/A</span>
+                      <% end %>
+                    </td>
+                    <td><%= time_ago_in_words(sample[:created_at]) %> ago</td>
+                  </tr>
+                <% end %>
+              <% else %>
+                <tr><td colspan="7" class="text-muted">No samples.</td></tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+
+        <% if group[:count] > group[:samples].size %>
+          <div class="small text-muted mt-2">Showing <%= group[:samples].size %> of <%= group[:count] %> records.</div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

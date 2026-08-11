@@ -1,0 +1,93 @@
+<meta http-equiv="refresh" content="30">
+
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Operations Control Center</h1>
+      <p class="text-muted mb-0">Alerts, backup status, dead jobs, and integrity drill-down.</p>
+      <div class="small text-muted mt-1">Auto-refresh: every 30 seconds</div>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Admin Operations", admin_operations_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <h2 class="h5 mb-3">Active Alerts</h2>
+  <% if @snapshot.alerts.any? %>
+    <div class="mb-4">
+      <% @snapshot.alerts.each do |alert| %>
+        <div class="alert alert-<%= alert[:level] %> py-2 mb-2"><%= alert[:message] %></div>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="alert alert-success mb-4">No operational alerts.</div>
+  <% end %>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header"><strong>Backup Status</strong></div>
+        <div class="card-body">
+          <div class="small text-muted">Path</div>
+          <code><%= @snapshot.backup_status[:path] %></code>
+          <hr>
+          <% if @snapshot.backup_status[:configured] %>
+            <div><strong><%= @snapshot.backup_status[:files] %></strong> file(s)</div>
+            <div><%= number_to_human_size(@snapshot.backup_status[:bytes]) %> total</div>
+            <% if @snapshot.backup_status[:latest] %>
+              <div class="mt-2 small text-muted">Latest</div>
+              <div><%= @snapshot.backup_status[:latest_name] %></div>
+              <div><%= time_ago_in_words(@snapshot.backup_status[:latest]) %> ago · <%= number_to_human_size(@snapshot.backup_status[:latest_bytes]) %></div>
+            <% else %>
+              <div class="badge bg-warning text-dark mt-2">No backup files found</div>
+            <% end %>
+          <% else %>
+            <div class="badge bg-warning text-dark mt-2">Backup path not configured</div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header"><strong>Sidekiq Recovery</strong></div>
+        <div class="card-body">
+          <div class="d-flex justify-content-between"><span>Dead</span><strong><%= @snapshot.dead %></strong></div>
+          <div class="d-flex justify-content-between"><span>Retries</span><strong><%= @snapshot.retries %></strong></div>
+          <div class="d-flex justify-content-between"><span>Scheduled</span><strong><%= @snapshot.scheduled %></strong></div>
+          <%= link_to "Manage Dead Jobs", admin_operations_dead_jobs_path, class: "btn btn-sm btn-outline-danger mt-3" %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header"><strong>Integrity Overview</strong></div>
+        <div class="card-body">
+          <div class="display-6"><%= @snapshot.problems_total %></div>
+          <div class="text-muted">open Manyfold problems</div>
+          <div class="mt-3 d-flex flex-wrap gap-1">
+            <% @snapshot.problems_by_category.sort_by { |name, _| name.to_s }.each do |name, count| %>
+              <%= link_to "#{name.to_s.humanize}: #{count}", admin_operations_problems_path(name), class: "btn btn-sm btn-outline-secondary" %>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="h5 mb-3">Threshold Status</h2>
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+      <thead><tr><th>Metric</th><th>Current</th><th>Warning</th><th>Critical</th></tr></thead>
+      <tbody>
+        <tr><td>Root disk</td><td><%= @snapshot.disk_used_percent %>%</td><td>80%</td><td>90%</td></tr>
+        <tr><td>Server memory</td><td><%= @snapshot.memory_used_percent %>%</td><td>85%</td><td>90%</td></tr>
+        <tr><td>Dead jobs</td><td><%= @snapshot.dead %></td><td>&gt; 0</td><td>-</td></tr>
+        <tr><td>Retry jobs</td><td><%= @snapshot.retries %></td><td>&gt; 0</td><td>-</td></tr>
+        <tr><td>Backup age</td><td><%= @snapshot.backup_status[:latest] ? time_ago_in_words(@snapshot.backup_status[:latest]) : "No backup" %></td><td>&gt; 48h</td><td>-</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

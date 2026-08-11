@@ -18,6 +18,12 @@ module Admin
       redirect_to admin_integrity_path, alert: "Preview is not available for that integrity category."
     end
 
+    def duplicate_sets
+      skip_policy_scope
+      skip_authorization
+      @report = Admin::DuplicateSetAnalyzer.call
+    end
+
     def clear_stale
       skip_authorization
 

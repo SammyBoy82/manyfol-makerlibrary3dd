@@ -72,6 +72,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/operations#problems",
     as: :admin_operations_problems
 
+  get "/admin/integrity",
+    to: "admin/integrity#index",
+    as: :admin_integrity
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

@@ -2,7 +2,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h1 class="h3 mb-1"><%= @preview.category.humanize %> Repair Preview</h1>
-      <p class="text-muted mb-0">Read-only repair planning. No files, paths, models, or database records are modified from this page.</p>
+      <p class="text-muted mb-0">Repair planning with a tightly scoped safe action for verified stale problem flags only.</p>
       <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@preview.generated_at) %> ago</div>
     </div>
     <div class="d-flex gap-2">
@@ -11,8 +11,22 @@
     </div>
   </div>
 
-  <div class="alert alert-warning">
-    <strong>Preview only.</strong> Apply actions are intentionally disabled in this release. Review the proposed impact before we enable any destructive or structural repair.
+  <% stale_count = @preview.summary.fetch(:stale_problem, 0) + @preview.summary.fetch(:orphan_problem, 0) %>
+
+  <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <strong>Phase 4.3 safe Apply:</strong>
+      only verified stale problem records can be cleared. No files, paths, models, or metadata are deleted, moved, renamed, or merged.
+    </div>
+    <% if stale_count.positive? %>
+      <%= button_to "Clear #{stale_count} Verified Stale Flag#{'s' unless stale_count == 1}",
+            admin_integrity_clear_stale_path(@preview.category),
+            method: :post,
+            class: "btn btn-success",
+            data: {turbo_confirm: "Clear only the verified stale #{@preview.category.humanize.downcase} problem flags? This does not delete or move files."} %>
+    <% else %>
+      <button class="btn btn-outline-secondary" disabled>No verified stale flags</button>
+    <% end %>
   </div>
 
   <div class="row g-3 mb-4">
@@ -72,6 +86,9 @@
                     else "bg-secondary"
                   end %>
                   <span class="badge <%= state_class %>"><%= row[:state].to_s.humanize %></span>
+                  <% if [:stale_problem, :orphan_problem].include?(row[:state]) %>
+                    <span class="badge bg-success">Safe cleanup eligible</span>
+                  <% end %>
                   <div class="mt-2"><strong><%= row[:recommendation] %></strong></div>
 
                   <% if row[:storage_exists] == true %>
@@ -113,7 +130,11 @@
                 <td style="min-width: 300px;">
                   <%= row[:impact] %>
                   <div class="mt-2">
-                    <button class="btn btn-sm btn-outline-secondary" disabled>Apply disabled</button>
+                    <% if [:stale_problem, :orphan_problem].include?(row[:state]) %>
+                      <span class="badge bg-success">Problem flag only</span>
+                    <% else %>
+                      <button class="btn btn-sm btn-outline-secondary" disabled>Destructive Apply disabled</button>
+                    <% end %>
                   </div>
                 </td>
               </tr>

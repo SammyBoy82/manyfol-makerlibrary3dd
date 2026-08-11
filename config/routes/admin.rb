@@ -76,6 +76,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#index",
     as: :admin_integrity
 
+  get "/admin/integrity/duplicates",
+    to: "admin/integrity#duplicate_sets",
+    as: :admin_integrity_duplicate_sets
+
   get "/admin/integrity/preview/:category",
     to: "admin/integrity#preview",
     as: :admin_integrity_preview,

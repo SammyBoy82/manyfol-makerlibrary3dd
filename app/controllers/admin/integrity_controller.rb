@@ -30,6 +30,17 @@ module Admin
       @report = Admin::NestingAnalyzer.call
     end
 
+    def nesting_merge_preview
+      skip_policy_scope
+      skip_authorization
+      @preview = Admin::NestingMergePreview.call(
+        parent_id: params[:parent_id],
+        child_id: params[:child_id]
+      )
+    rescue ArgumentError => error
+      redirect_to admin_integrity_nesting_path, alert: error.message
+    end
+
     def clear_stale
       skip_authorization
 

@@ -1,0 +1,130 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1"><%= @preview.category.humanize %> Repair Preview</h1>
+      <p class="text-muted mb-0">Read-only repair planning. No files, paths, models, or database records are modified from this page.</p>
+      <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@preview.generated_at) %> ago</div>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Back to Analyzer", admin_integrity_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <div class="alert alert-warning">
+    <strong>Preview only.</strong> Apply actions are intentionally disabled in this release. Review the proposed impact before we enable any destructive or structural repair.
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card h-100"><div class="card-body">
+        <div class="text-muted small">Total Problems</div>
+        <div class="display-6"><%= @preview.total %></div>
+      </div></div>
+    </div>
+    <% @preview.summary.sort_by { |state, _| state.to_s }.first(3).each do |state, count| %>
+      <div class="col-md-3">
+        <div class="card h-100"><div class="card-body">
+          <div class="text-muted small"><%= state.to_s.humanize %></div>
+          <div class="display-6"><%= count %></div>
+        </div></div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Problem</th>
+              <th>Object</th>
+              <th>Library / Path</th>
+              <th>Assessment</th>
+              <th>Proposed Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @preview.rows.each do |row| %>
+              <tr>
+                <td>
+                  <code>#<%= row[:problem_id] %></code>
+                  <div class="small text-muted"><%= row[:problematic_type] %> #<%= row[:problematic_id] %></div>
+                </td>
+                <td style="min-width: 260px;">
+                  <div><strong><%= row[:label] %></strong></div>
+                  <% if row[:size] %><div class="small text-muted"><%= number_to_human_size(row[:size]) %></div><% end %>
+                  <% if row[:digest].present? %><div class="small text-muted"><code><%= row[:digest].to_s.first(16) %>…</code></div><% end %>
+                  <% if row[:error].present? %><div class="small text-danger"><%= row[:error] %></div><% end %>
+                </td>
+                <td style="max-width: 500px;">
+                  <div><%= row[:library].presence || "-" %></div>
+                  <code class="text-break"><%= row[:path].presence || row[:model_path].presence || "-" %></code>
+                </td>
+                <td style="min-width: 280px;">
+                  <% state_class = case row[:state]
+                    when :confirmed_missing then "bg-danger"
+                    when :duplicate_set, :structural_conflict then "bg-warning text-dark"
+                    when :stale_problem then "bg-info text-dark"
+                    when :orphan_problem then "bg-secondary"
+                    when :error then "bg-danger"
+                    else "bg-secondary"
+                  end %>
+                  <span class="badge <%= state_class %>"><%= row[:state].to_s.humanize %></span>
+                  <div class="mt-2"><strong><%= row[:recommendation] %></strong></div>
+
+                  <% if row[:storage_exists] == true %>
+                    <div class="small mt-1"><span class="badge bg-success">Storage exists</span></div>
+                  <% elsif row[:storage_exists] == false %>
+                    <div class="small mt-1"><span class="badge bg-danger">Storage missing</span></div>
+                  <% end %>
+
+                  <% if row[:duplicate_candidates].present? %>
+                    <div class="small text-muted mt-2">Duplicate candidates: <%= row[:duplicate_count] %></div>
+                    <ul class="small mb-0 ps-3">
+                      <% row[:duplicate_candidates].first(5).each do |candidate| %>
+                        <li>
+                          <code><%= candidate[:path] %></code>
+                          <% if candidate[:same_model] %><span class="badge bg-info text-dark">same model</span><% end %>
+                        </li>
+                      <% end %>
+                    </ul>
+                  <% end %>
+
+                  <% if row[:parent_models].present? %>
+                    <div class="small text-muted mt-2">Parent models:</div>
+                    <ul class="small mb-0 ps-3">
+                      <% row[:parent_models].each do |parent| %>
+                        <li><%= parent[:name] %> — <code><%= parent[:path] %></code></li>
+                      <% end %>
+                    </ul>
+                  <% end %>
+
+                  <% if row[:nested_models].present? %>
+                    <div class="small text-muted mt-2">Nested models:</div>
+                    <ul class="small mb-0 ps-3">
+                      <% row[:nested_models].first(10).each do |child| %>
+                        <li><%= child[:name] %> — <code><%= child[:path] %></code> · <%= child[:files] %> file(s)</li>
+                      <% end %>
+                    </ul>
+                  <% end %>
+                </td>
+                <td style="min-width: 300px;">
+                  <%= row[:impact] %>
+                  <div class="mt-2">
+                    <button class="btn btn-sm btn-outline-secondary" disabled>Apply disabled</button>
+                  </div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <% if @preview.total > @preview.rows.size %>
+    <div class="small text-muted mt-2">Showing <%= @preview.rows.size %> of <%= @preview.total %> problems.</div>
+  <% end %>
+</div>

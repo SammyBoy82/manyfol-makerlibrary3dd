@@ -24,6 +24,12 @@ module Admin
       @report = Admin::DuplicateSetAnalyzer.call
     end
 
+    def nesting
+      skip_policy_scope
+      skip_authorization
+      @report = Admin::NestingAnalyzer.call
+    end
+
     def clear_stale
       skip_authorization
 

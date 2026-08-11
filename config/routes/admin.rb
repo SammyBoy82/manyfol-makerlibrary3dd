@@ -88,6 +88,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#nesting",
     as: :admin_integrity_nesting
 
+  get "/admin/integrity/nesting/merge-preview",
+    to: "admin/integrity#nesting_merge_preview",
+    as: :admin_integrity_nesting_merge_preview
+
   get "/admin/integrity/preview/:category",
     to: "admin/integrity#preview",
     as: :admin_integrity_preview,

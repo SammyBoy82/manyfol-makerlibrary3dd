@@ -35,6 +35,23 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/operations#control_center",
     as: :admin_operations_control_center
 
+  get "/admin/operations/backups",
+    to: "admin/operations#backups",
+    as: :admin_operations_backups
+
+  post "/admin/operations/backups/request",
+    to: "admin/operations#request_backup",
+    as: :admin_operations_request_backup
+
+  patch "/admin/operations/backups/settings",
+    to: "admin/operations#update_backup_settings",
+    as: :admin_operations_backup_settings
+
+  get "/admin/operations/backups/download/:filename",
+    to: "admin/operations#download_backup",
+    as: :admin_operations_download_backup,
+    constraints: {filename: /[^\/]+/}
+
   get "/admin/operations/dead-jobs",
     to: "admin/operations#dead_jobs",
     as: :admin_operations_dead_jobs

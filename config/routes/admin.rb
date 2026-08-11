@@ -31,6 +31,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/operations#index",
     as: :admin_operations
 
+  get "/admin/operations/control-center",
+    to: "admin/operations#control_center",
+    as: :admin_operations_control_center
+
   get "/admin/operations/dead-jobs",
     to: "admin/operations#dead_jobs",
     as: :admin_operations_dead_jobs

@@ -43,6 +43,8 @@ module Admin
       :problems_total,
       :problems_by_category,
       :library_storage,
+      :backup_status,
+      :alerts,
       keyword_init: true
     )
 
@@ -57,8 +59,10 @@ module Admin
       postgres = postgres_status
       sidekiq = sidekiq_status
       container = container_status
+      libraries = library_storage_status
+      backups = backup_status
 
-      Result.new(
+      values = {
         hostname: ENV.fetch("HOSTNAME", Socket.gethostname),
         uptime_seconds: uptime_seconds,
         host_cpu_percent: host_cpu_percent,
@@ -95,8 +99,12 @@ module Admin
         model_files: ModelFile.count,
         problems_total: Problem.count,
         problems_by_category: Problem.group(:category).count,
-        library_storage: library_storage_status
-      )
+        library_storage: libraries,
+        backup_status: backups
+      }
+
+      values[:alerts] = build_alerts(values)
+      Result.new(**values)
     end
 
     private
@@ -323,6 +331,26 @@ module Admin
       end
     end
 
+    def backup_status
+      path = ENV.fetch("MAKERLIBRARY_BACKUP_PATH", "/archive/backups")
+      return {path: path, configured: false, files: 0, bytes: 0, latest: nil, latest_bytes: 0} unless Dir.exist?(path)
+
+      files = Dir.glob(File.join(path, "**", "*"), File::FNM_DOTMATCH).select { |entry| File.file?(entry) }
+      latest = files.max_by { |entry| File.mtime(entry) }
+
+      {
+        path: path,
+        configured: true,
+        files: files.length,
+        bytes: files.sum { |entry| File.size(entry) rescue 0 },
+        latest: latest && File.mtime(latest),
+        latest_name: latest && File.basename(latest),
+        latest_bytes: latest ? (File.size(latest) rescue 0) : 0
+      }
+    rescue => error
+      {path: path, configured: false, files: 0, bytes: 0, latest: nil, latest_bytes: 0, error: error.class.name}
+    end
+
     def redis_ok?
       Sidekiq.redis { |connection| connection.call("PING") == "PONG" }
     rescue
@@ -361,6 +389,47 @@ module Admin
         dead: 0,
         processes: 0
       }
+    end
+
+    def build_alerts(values)
+      alerts = []
+
+      alerts << {level: :danger, message: "PostgreSQL is unavailable."} unless values[:postgres_ok]
+      alerts << {level: :danger, message: "Redis is unavailable."} unless values[:redis_ok]
+
+      if values[:disk_used_percent].to_f >= 90
+        alerts << {level: :danger, message: "Root disk usage is #{values[:disk_used_percent]}%."}
+      elsif values[:disk_used_percent].to_f >= 80
+        alerts << {level: :warning, message: "Root disk usage is #{values[:disk_used_percent]}%."}
+      end
+
+      if values[:memory_used_percent].to_f >= 90
+        alerts << {level: :danger, message: "Server memory usage is #{values[:memory_used_percent]}%."}
+      elsif values[:memory_used_percent].to_f >= 85
+        alerts << {level: :warning, message: "Server memory usage is #{values[:memory_used_percent]}%."}
+      end
+
+      values[:library_storage].each do |storage|
+        next unless storage[:used_percent]
+        next if storage[:used_percent].to_f < 80
+
+        level = storage[:used_percent].to_f >= 90 ? :danger : :warning
+        alerts << {level: level, message: "Storage volume for #{storage[:name]} is #{storage[:used_percent]}% full."}
+      end
+
+      alerts << {level: :warning, message: "Sidekiq has #{values[:dead]} dead job(s)."} if values[:dead].to_i.positive?
+      alerts << {level: :warning, message: "Sidekiq has #{values[:retries]} retry job(s)."} if values[:retries].to_i.positive?
+
+      backup = values[:backup_status]
+      if !backup[:configured]
+        alerts << {level: :warning, message: "Backup folder is not configured or does not exist: #{backup[:path]}."}
+      elsif backup[:latest].nil?
+        alerts << {level: :warning, message: "Backup folder exists but contains no backup files."}
+      elsif backup[:latest] < 2.days.ago
+        alerts << {level: :warning, message: "Latest backup is older than 48 hours."}
+      end
+
+      alerts
     end
   end
 end

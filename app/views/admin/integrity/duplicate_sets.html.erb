@@ -1,8 +1,8 @@
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-      <h1 class="h3 mb-1">Duplicate Canonical-Copy Review</h1>
-      <p class="text-muted mb-0">Grouped by exact digest with controlled same-model cleanup.</p>
+      <h1 class="h3 mb-1">Duplicate Review</h1>
+      <p class="text-muted mb-0">Manyfold detects duplicates by exact file content, not by filename or path.</p>
       <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@report.generated_at) %> ago</div>
     </div>
     <div class="d-flex gap-2">
@@ -11,103 +11,130 @@
     </div>
   </div>
 
-  <div class="alert alert-warning">
-    <strong>Phase 4.6 controlled cleanup.</strong>
-    Select a canonical copy, then select redundant copies from the <strong>same model only</strong>. The server revalidates digest, model identity and storage immediately before removal. Cross-model and cross-library copies remain protected because identical content can legitimately belong to different catalogue models.
+  <div class="alert alert-info">
+    <strong>What does “duplicate” mean here?</strong>
+    Two files can have completely different names, folders and model titles and still be flagged because their binary contents are exactly identical and produce the same digest/hash.
+    <strong>Different models are protected and normally require no action.</strong> Cleanup is offered only when the same model contains multiple identical physical copies.
   </div>
 
+  <% cleanup_sets = @report.sets.count { |s| s[:cleanup_candidate] } %>
+  <% shared_sets = @report.sets.count { |s| [:shared_cross_model, :shared_cross_library].include?(s[:classification]) } %>
+
   <div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Duplicate Problems</div><div class="display-6"><%= @report.problem_count %></div></div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Digest Sets Shown</div><div class="display-6"><%= @report.set_count %></div></div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Cross-Model Sets</div><div class="display-6"><%= @report.sets.count { |s| s[:models].size > 1 } %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Duplicate Flags</div><div class="display-6"><%= @report.problem_count %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100 border-success"><div class="card-body"><div class="text-muted small">Real Cleanup Candidates</div><div class="display-6"><%= cleanup_sets %></div><div class="small text-muted">same model only</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Shared Identical Assets</div><div class="display-6"><%= shared_sets %></div><div class="small text-muted">different models — leave alone</div></div></div></div>
     <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Sets With Missing Copies</div><div class="display-6"><%= @report.sets.count { |s| s[:missing_count].positive? } %></div></div></div></div>
   </div>
 
   <% @report.sets.each_with_index do |set, index| %>
     <% form_id = "duplicate-set-#{index}" %>
-    <div class="card mb-4 duplicate-set-card" data-form-id="<%= form_id %>">
+    <% actionable = set[:cleanup_candidate] %>
+
+    <div class="card mb-4 <%= 'border-success' if actionable %>">
       <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
-          <strong>Duplicate Set <%= index + 1 %></strong>
-          <span class="badge bg-secondary ms-2"><%= set[:member_count] %> copies</span>
-          <% if set[:same_model_only] %>
-            <span class="badge bg-success ms-1">same model</span>
+          <strong>Set <%= index + 1 %></strong>
+          <span class="badge bg-secondary ms-2"><%= set[:member_count] %> identical file contents</span>
+
+          <% if actionable %>
+            <span class="badge bg-success ms-1">ACTIONABLE — same model</span>
+          <% elsif set[:classification] == :shared_cross_library %>
+            <span class="badge bg-secondary ms-1">NO ACTION — shared across models/libraries</span>
+          <% elsif set[:classification] == :shared_cross_model %>
+            <span class="badge bg-secondary ms-1">NO ACTION — shared across models</span>
           <% else %>
-            <span class="badge bg-warning text-dark ms-1">cross-model</span>
+            <span class="badge bg-secondary ms-1">REVIEW ONLY</span>
           <% end %>
-          <% if set[:libraries].size > 1 %><span class="badge bg-danger ms-1">cross-library</span><% end %>
         </div>
         <div class="small text-muted">
-          <code><%= set[:digest].to_s.first(24) %>…</code>
+          same content hash: <code><%= set[:digest].to_s.first(20) %>…</code>
           <% if set[:size] %> · <%= number_to_human_size(set[:size]) %><% end %>
         </div>
       </div>
 
       <div class="card-body">
-        <div class="mb-3">
+        <% if actionable %>
+          <div class="alert alert-success py-2">
+            <strong>Why this needs cleanup:</strong> <%= set[:explanation] %>
+          </div>
           <% if set[:recommended_id] %>
-            <span class="badge bg-success">Recommended canonical: ModelFile #<%= set[:recommended_id] %></span>
-            <span class="small text-muted ms-2"><%= set[:recommendation_reason] %></span>
-          <% else %>
-            <span class="badge bg-danger">No existing copy available</span>
+            <div class="mb-3">
+              <span class="badge bg-success">Suggested copy to KEEP: ModelFile #<%= set[:recommended_id] %></span>
+              <span class="small text-muted ms-2"><%= set[:recommendation_reason] %></span>
+            </div>
           <% end %>
-        </div>
+        <% else %>
+          <div class="alert alert-light border py-2 mb-3">
+            <strong>Why Manyfold flagged this:</strong> all rows below contain exactly the same binary data.<br>
+            <strong>What you should do:</strong> nothing. <%= set[:explanation] %>
+          </div>
+        <% end %>
 
         <%= form_with url: admin_integrity_remove_duplicates_path,
               method: :post,
               local: true,
               id: form_id,
-              class: "duplicate-cleanup-form" do %>
+              class: "duplicate-cleanup-form",
+              data: {actionable: actionable.to_s} do %>
           <div class="table-responsive">
             <table class="table table-sm table-striped align-middle mb-0">
               <thead>
                 <tr>
-                  <th>Canonical</th>
-                  <th>Remove</th>
+                  <% if actionable %>
+                    <th style="width:120px;">KEEP this copy</th>
+                    <th style="width:140px;">DELETE duplicate</th>
+                  <% end %>
                   <th>ModelFile</th>
-                  <th>Model / Library</th>
-                  <th>Path</th>
+                  <th>Catalogue Model / Library</th>
+                  <th>Filename / Path</th>
                   <th>Type</th>
-                  <th>References</th>
+                  <th>Used By</th>
                   <th>Storage</th>
                 </tr>
               </thead>
               <tbody>
                 <% set[:members].each do |member| %>
                   <% existing = member[:storage_exists] == true %>
-                  <tr class="<%= 'table-success' if member[:id] == set[:recommended_id] %>">
-                    <td>
-                      <% if existing %>
-                        <%= radio_button_tag "canonical_id",
-                              member[:id],
-                              member[:id] == set[:recommended_id],
-                              class: "canonical-radio",
-                              data: {model_id: member[:model_id]} %>
-                      <% else %>
-                        <span class="text-muted">—</span>
-                      <% end %>
-                    </td>
-                    <td>
-                      <% if existing %>
-                        <%= check_box_tag "remove_ids[]",
-                              member[:id],
-                              false,
-                              class: "duplicate-remove-checkbox",
-                              disabled: true,
-                              data: {model_id: member[:model_id], file_id: member[:id]} %>
-                      <% else %>
-                        <span class="text-muted">—</span>
-                      <% end %>
-                    </td>
+                  <tr class="<%= 'table-success' if actionable && member[:id] == set[:recommended_id] %>">
+                    <% if actionable %>
+                      <td>
+                        <% if existing %>
+                          <%= radio_button_tag "canonical_id",
+                                member[:id],
+                                member[:id] == set[:recommended_id],
+                                class: "canonical-radio",
+                                data: {model_id: member[:model_id]} %>
+                        <% else %>
+                          <span class="text-muted">Unavailable</span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% if existing %>
+                          <%= check_box_tag "remove_ids[]",
+                                member[:id],
+                                false,
+                                class: "duplicate-remove-checkbox",
+                                disabled: true,
+                                data: {model_id: member[:model_id], file_id: member[:id]} %>
+                        <% else %>
+                          <span class="text-muted">Unavailable</span>
+                        <% end %>
+                      </td>
+                    <% end %>
+
                     <td>
                       <code>#<%= member[:id] %></code>
-                      <% if member[:problem_id] %><div class="small text-muted">problem #<%= member[:problem_id] %></div><% end %>
+                      <% if member[:problem_id] %><div class="small text-muted">duplicate flag #<%= member[:problem_id] %></div><% end %>
                     </td>
                     <td>
                       <div><strong><%= member[:model_name].presence || "-" %></strong></div>
                       <div class="small text-muted">Model #<%= member[:model_id] || '-' %> · <%= member[:library].presence || '-' %></div>
                     </td>
-                    <td style="max-width: 520px;"><code class="text-break"><%= member[:path] %></code></td>
+                    <td style="max-width: 560px;">
+                      <div><strong><%= member[:filename] %></strong></div>
+                      <code class="small text-break"><%= member[:path] %></code>
+                    </td>
                     <td>
                       <span class="badge bg-light text-dark border"><%= member[:extension].presence || '-' %></span>
                       <% if member[:is_3d_model] %><span class="badge bg-primary">3D</span><% end %>
@@ -133,13 +160,15 @@
             </table>
           </div>
 
-          <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
-            <%= submit_tag "Remove Selected Same-Model Duplicates",
-                  class: "btn btn-sm btn-danger duplicate-submit",
-                  disabled: true,
-                  data: {turbo_confirm: "Remove the selected redundant physical files and database records only after server-side digest/model/storage revalidation? The selected canonical copy will be retained."} %>
-            <span class="small text-muted duplicate-help">Choose a canonical copy. Only existing copies from that same model will become selectable.</span>
-          </div>
+          <% if actionable %>
+            <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+              <%= submit_tag "Delete Selected Redundant Copies",
+                    class: "btn btn-sm btn-danger duplicate-submit",
+                    disabled: true,
+                    data: {turbo_confirm: "Delete only the selected redundant same-model copies after server-side digest/model/storage revalidation? The chosen KEEP copy will remain."} %>
+              <span class="small text-muted duplicate-help">Step 1: choose the copy to KEEP. Step 2: tick one or more other copies to DELETE.</span>
+            </div>
+          <% end %>
         <% end %>
       </div>
     </div>
@@ -152,7 +181,7 @@
 
 <script>
   (() => {
-    document.querySelectorAll(".duplicate-cleanup-form").forEach((form) => {
+    document.querySelectorAll(".duplicate-cleanup-form[data-actionable='true']").forEach((form) => {
       const radios = Array.from(form.querySelectorAll(".canonical-radio"));
       const boxes = Array.from(form.querySelectorAll(".duplicate-remove-checkbox"));
       const submit = form.querySelector(".duplicate-submit");
@@ -171,11 +200,12 @@
           if (allowed) eligible += 1;
         });
 
-        if (submit) submit.disabled = !(eligible > 0 && boxes.some((box) => box.checked));
+        const selected = boxes.filter((box) => box.checked).length;
+        if (submit) submit.disabled = selected === 0;
         if (help) {
           help.textContent = canonical
-            ? `${eligible} same-model existing duplicate(s) eligible for selection.`
-            : "Choose a canonical copy. Only existing copies from that same model will become selectable.";
+            ? `KEEP ModelFile #${canonicalId}. ${eligible} redundant same-model copy/copies are eligible; tick the ones you want to DELETE.`
+            : "Step 1: choose the copy to KEEP. Step 2: tick one or more other copies to DELETE.";
         }
       };
 

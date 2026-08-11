@@ -84,6 +84,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#remove_duplicates",
     as: :admin_integrity_remove_duplicates
 
+  get "/admin/integrity/nesting",
+    to: "admin/integrity#nesting",
+    as: :admin_integrity_nesting
+
   get "/admin/integrity/preview/:category",
     to: "admin/integrity#preview",
     as: :admin_integrity_preview,

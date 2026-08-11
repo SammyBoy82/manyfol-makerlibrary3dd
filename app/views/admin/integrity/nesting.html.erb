@@ -1,0 +1,112 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Nesting Review</h1>
+      <p class="text-muted mb-0">Review catalogue models whose folders contain other catalogue models.</p>
+      <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@report.generated_at) %> ago</div>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Back to Analyzer", admin_integrity_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Legacy Nesting Preview", admin_integrity_preview_path("nesting"), class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>What does nesting mean?</strong>
+    A catalogue model has been detected inside another catalogue model's folder tree. This is not automatically wrong. Some folders intentionally contain sub-models. This page shows the exact parent/child structure before any merge is enabled.
+  </div>
+
+  <% parents = @report.groups.count { |g| g[:role] == :parent_with_children } %>
+  <% children = @report.groups.count { |g| g[:role] == :child_inside_parent } %>
+  <% stale = @report.groups.count { |g| g[:role] == :stale } %>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Nesting Flags</div><div class="display-6"><%= @report.problem_count %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Parent Models</div><div class="display-6"><%= parents %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Nested Child Models</div><div class="display-6"><%= children %></div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Possibly Stale</div><div class="display-6"><%= stale %></div></div></div></div>
+  </div>
+
+  <% @report.groups.each do |group| %>
+    <div class="card mb-4 <%= 'border-warning' unless group[:role] == :stale %>">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong><%= group[:model_name] %></strong>
+          <span class="badge bg-secondary ms-2">Model #<%= group[:model_id] %></span>
+          <% if group[:role] == :parent_with_children %>
+            <span class="badge bg-warning text-dark ms-1">PARENT CONTAINS MODELS</span>
+          <% elsif group[:role] == :child_inside_parent %>
+            <span class="badge bg-info text-dark ms-1">NESTED CHILD</span>
+          <% else %>
+            <span class="badge bg-secondary ms-1">POSSIBLY STALE</span>
+          <% end %>
+        </div>
+        <div class="small text-muted">problem #<%= group[:problem_id] %></div>
+      </div>
+
+      <div class="card-body">
+        <div class="mb-3">
+          <div><strong><%= group[:explanation] %></strong></div>
+          <div class="small text-muted mt-1"><%= group[:library] %> · <code><%= group[:path] %></code></div>
+          <div class="small mt-1"><%= group[:file_count] %> file(s) · <%= group[:three_d_count] %> 3D · <%= group[:image_count] %> image(s)</div>
+        </div>
+
+        <% if group[:parent_models].any? %>
+          <div class="mb-3">
+            <div class="fw-semibold">Parent catalogue model(s)</div>
+            <div class="table-responsive mt-2">
+              <table class="table table-sm table-striped align-middle mb-0">
+                <thead><tr><th>Model</th><th>Path</th><th>Files</th><th>3D</th><th>Images</th></tr></thead>
+                <tbody>
+                  <% group[:parent_models].each do |parent| %>
+                    <tr>
+                      <td><strong><%= parent[:name] %></strong><div class="small text-muted">Model #<%= parent[:id] %></div></td>
+                      <td><code><%= parent[:path] %></code></td>
+                      <td><%= parent[:file_count] %></td>
+                      <td><%= parent[:three_d_count] %></td>
+                      <td><%= parent[:image_count] %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
+
+        <% if group[:child_models].any? %>
+          <div class="mb-3">
+            <div class="fw-semibold">Child catalogue model(s) physically inside this folder</div>
+            <div class="table-responsive mt-2">
+              <table class="table table-sm table-striped align-middle mb-0">
+                <thead><tr><th>Model</th><th>Path</th><th>Files</th><th>3D</th><th>Images</th></tr></thead>
+                <tbody>
+                  <% group[:child_models].each do |child| %>
+                    <tr>
+                      <td><strong><%= child[:name] %></strong><div class="small text-muted">Model #<%= child[:id] %></div></td>
+                      <td><code><%= child[:path] %></code></td>
+                      <td><%= child[:file_count] %></td>
+                      <td><%= child[:three_d_count] %></td>
+                      <td><%= child[:image_count] %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
+
+        <% if group[:role] == :stale %>
+          <div class="alert alert-light border mb-0">No current nesting relationship exists. This is eligible for the existing safe stale-flag cleanup.</div>
+        <% else %>
+          <div class="alert alert-warning mb-0">
+            <strong>No merge yet.</strong> Phase 4.8 will let you choose whether each child should remain a separate catalogue model or be merged into its parent, with an exact file/metadata impact preview first.
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @report.groups.empty? %>
+    <div class="alert alert-success">No nesting problems remain.</div>
+  <% end %>
+</div>

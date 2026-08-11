@@ -14,7 +14,7 @@
   </div>
 
   <div class="alert alert-info">
-    Phase 4 workflow: <strong>Analyze → Preview → Apply</strong>. Preview is now available for Missing, Duplicate, and Nesting. Apply remains disabled.
+    Phase 4 workflow: <strong>Analyze → Preview → Apply</strong>. Missing cleanup is operational; Duplicate now has canonical-copy review; Nesting remains preview-only.
   </div>
 
   <div class="row g-3 mb-4">
@@ -40,10 +40,10 @@
           end %>
           <span class="badge <%= badge_class %>"><%= group[:risk].to_s.humanize %></span>
           <span class="badge bg-light text-dark border"><%= group[:mode].to_s.humanize %></span>
-          <% if Admin::IntegrityPreview::SUPPORTED_CATEGORIES.include?(group[:category]) %>
-            <%= link_to "Preview",
-                  admin_integrity_preview_path(group[:category]),
-                  class: "btn btn-sm btn-outline-primary" %>
+          <% if group[:category] == "duplicate" %>
+            <%= link_to "Canonical Review", admin_integrity_duplicate_sets_path, class: "btn btn-sm btn-outline-warning" %>
+          <% elsif Admin::IntegrityPreview::SUPPORTED_CATEGORIES.include?(group[:category]) %>
+            <%= link_to "Preview", admin_integrity_preview_path(group[:category]), class: "btn btn-sm btn-outline-primary" %>
           <% end %>
         </div>
       </div>

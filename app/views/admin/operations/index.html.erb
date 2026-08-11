@@ -1,8 +1,11 @@
+<meta http-equiv="refresh" content="30">
+
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h1 class="h3 mb-1">Admin Operations</h1>
       <p class="text-muted mb-0">Server, container, database, Redis, Sidekiq, and library storage overview.</p>
+      <div class="small text-muted mt-1">Auto-refresh: every 30 seconds</div>
     </div>
     <div class="d-flex gap-2">
       <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "btn btn-outline-primary" %>
@@ -118,10 +121,11 @@
               <th>Library</th>
               <th>Storage</th>
               <th>Path</th>
-              <th>Used</th>
-              <th>Free</th>
-              <th>Total</th>
-              <th>Usage</th>
+              <th>Library Size</th>
+              <th>Device / Mount</th>
+              <th>Volume Free</th>
+              <th>Volume Total</th>
+              <th>Volume Usage</th>
               <th>Models</th>
               <th>Files</th>
             </tr>
@@ -133,9 +137,13 @@
                 <td><span class="badge bg-light text-dark border"><%= storage[:service].to_s.upcase %></span></td>
                 <td><code><%= storage[:path] %></code></td>
                 <% if storage[:error].present? %>
-                  <td colspan="4"><span class="badge bg-danger">Unavailable: <%= storage[:error] %></span></td>
+                  <td colspan="5"><span class="badge bg-danger">Unavailable: <%= storage[:error] %></span></td>
                 <% elsif storage[:total].present? %>
-                  <td><%= number_to_human_size(storage[:used]) %></td>
+                  <td><strong><%= number_to_human_size(storage[:directory_bytes]) %></strong></td>
+                  <td>
+                    <div><code><%= storage[:device] %></code></div>
+                    <div class="small text-muted"><%= storage[:mountpoint] %></div>
+                  </td>
                   <td><%= number_to_human_size(storage[:available]) %></td>
                   <td><%= number_to_human_size(storage[:total]) %></td>
                   <td>
@@ -144,7 +152,7 @@
                     </span>
                   </td>
                 <% else %>
-                  <td>-</td><td>-</td><td>-</td><td>-</td>
+                  <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
                 <% end %>
                 <td><%= storage[:models] %></td>
                 <td><%= storage[:files] %></td>
@@ -208,6 +216,6 @@
   </div>
 
   <div class="alert alert-info mb-0">
-    VM metrics come from Linux host-visible counters. Container metrics come from the MakerLibrary3D cgroup/network namespace. Library storage usage is measured independently for each filesystem-backed Manyfold library mount.
+    Library Size is the actual size of each library folder. Volume Free/Total/Usage refer to the underlying mounted filesystem, so libraries sharing the same disk will correctly show the same volume capacity while having different Library Size values.
   </div>
 </div>

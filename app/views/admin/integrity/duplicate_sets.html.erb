@@ -2,7 +2,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h1 class="h3 mb-1">Duplicate Canonical-Copy Review</h1>
-      <p class="text-muted mb-0">Grouped by exact file digest. Review all locations before any duplicate removal is enabled.</p>
+      <p class="text-muted mb-0">Grouped by exact digest with controlled same-model cleanup.</p>
       <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@report.generated_at) %> ago</div>
     </div>
     <div class="d-flex gap-2">
@@ -12,7 +12,8 @@
   </div>
 
   <div class="alert alert-warning">
-    <strong>Review only.</strong> No duplicate files or database records can be removed from this page yet. The recommended canonical copy is advisory and favors an existing file already used as preview/entrypoint, then an only-3D source, then an existing 3D source.
+    <strong>Phase 4.6 controlled cleanup.</strong>
+    Select a canonical copy, then select redundant copies from the <strong>same model only</strong>. The server revalidates digest, model identity and storage immediately before removal. Cross-model and cross-library copies remain protected because identical content can legitimately belong to different catalogue models.
   </div>
 
   <div class="row g-3 mb-4">
@@ -23,12 +24,17 @@
   </div>
 
   <% @report.sets.each_with_index do |set, index| %>
-    <div class="card mb-4">
+    <% form_id = "duplicate-set-#{index}" %>
+    <div class="card mb-4 duplicate-set-card" data-form-id="<%= form_id %>">
       <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
           <strong>Duplicate Set <%= index + 1 %></strong>
           <span class="badge bg-secondary ms-2"><%= set[:member_count] %> copies</span>
-          <% if set[:same_model_only] %><span class="badge bg-info text-dark ms-1">same model</span><% else %><span class="badge bg-warning text-dark ms-1">cross-model</span><% end %>
+          <% if set[:same_model_only] %>
+            <span class="badge bg-success ms-1">same model</span>
+          <% else %>
+            <span class="badge bg-warning text-dark ms-1">cross-model</span>
+          <% end %>
           <% if set[:libraries].size > 1 %><span class="badge bg-danger ms-1">cross-library</span><% end %>
         </div>
         <div class="small text-muted">
@@ -47,63 +53,94 @@
           <% end %>
         </div>
 
-        <div class="table-responsive">
-          <table class="table table-sm table-striped align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Canonical</th>
-                <th>ModelFile</th>
-                <th>Model / Library</th>
-                <th>Path</th>
-                <th>Type</th>
-                <th>References</th>
-                <th>Storage</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% set[:members].each do |member| %>
-                <tr class="<%= 'table-success' if member[:id] == set[:recommended_id] %>">
-                  <td>
-                    <input type="radio" name="canonical_<%= set[:digest].to_s.first(16) %>" value="<%= member[:id] %>" <%= 'checked' if member[:id] == set[:recommended_id] %> disabled>
-                  </td>
-                  <td>
-                    <code>#<%= member[:id] %></code>
-                    <% if member[:problem_id] %><div class="small text-muted">problem #<%= member[:problem_id] %></div><% end %>
-                  </td>
-                  <td>
-                    <div><strong><%= member[:model_name].presence || "-" %></strong></div>
-                    <div class="small text-muted">Model #<%= member[:model_id] || '-' %> · <%= member[:library].presence || '-' %></div>
-                  </td>
-                  <td style="max-width: 520px;"><code class="text-break"><%= member[:path] %></code></td>
-                  <td>
-                    <span class="badge bg-light text-dark border"><%= member[:extension].presence || '-' %></span>
-                    <% if member[:is_3d_model] %><span class="badge bg-primary">3D</span><% end %>
-                    <% if member[:only_3d_in_model] %><span class="badge bg-warning text-dark">only 3D in model</span><% end %>
-                  </td>
-                  <td>
-                    <% if member[:preview_ref] %><span class="badge bg-success">preview</span><% end %>
-                    <% if member[:entrypoint_ref] %><span class="badge bg-info text-dark">entrypoint</span><% end %>
-                    <% unless member[:preview_ref] || member[:entrypoint_ref] %><span class="text-muted">none</span><% end %>
-                  </td>
-                  <td>
-                    <% if member[:storage_exists] == true %>
-                      <span class="badge bg-success">Exists</span>
-                    <% elsif member[:storage_exists] == false %>
-                      <span class="badge bg-danger">Missing</span>
-                    <% else %>
-                      <span class="badge bg-secondary">Unknown</span>
-                    <% end %>
-                  </td>
+        <%= form_with url: admin_integrity_remove_duplicates_path,
+              method: :post,
+              local: true,
+              id: form_id,
+              class: "duplicate-cleanup-form" do %>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Canonical</th>
+                  <th>Remove</th>
+                  <th>ModelFile</th>
+                  <th>Model / Library</th>
+                  <th>Path</th>
+                  <th>Type</th>
+                  <th>References</th>
+                  <th>Storage</th>
                 </tr>
-              <% end %>
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                <% set[:members].each do |member| %>
+                  <% existing = member[:storage_exists] == true %>
+                  <tr class="<%= 'table-success' if member[:id] == set[:recommended_id] %>">
+                    <td>
+                      <% if existing %>
+                        <%= radio_button_tag "canonical_id",
+                              member[:id],
+                              member[:id] == set[:recommended_id],
+                              class: "canonical-radio",
+                              data: {model_id: member[:model_id]} %>
+                      <% else %>
+                        <span class="text-muted">—</span>
+                      <% end %>
+                    </td>
+                    <td>
+                      <% if existing %>
+                        <%= check_box_tag "remove_ids[]",
+                              member[:id],
+                              false,
+                              class: "duplicate-remove-checkbox",
+                              disabled: true,
+                              data: {model_id: member[:model_id], file_id: member[:id]} %>
+                      <% else %>
+                        <span class="text-muted">—</span>
+                      <% end %>
+                    </td>
+                    <td>
+                      <code>#<%= member[:id] %></code>
+                      <% if member[:problem_id] %><div class="small text-muted">problem #<%= member[:problem_id] %></div><% end %>
+                    </td>
+                    <td>
+                      <div><strong><%= member[:model_name].presence || "-" %></strong></div>
+                      <div class="small text-muted">Model #<%= member[:model_id] || '-' %> · <%= member[:library].presence || '-' %></div>
+                    </td>
+                    <td style="max-width: 520px;"><code class="text-break"><%= member[:path] %></code></td>
+                    <td>
+                      <span class="badge bg-light text-dark border"><%= member[:extension].presence || '-' %></span>
+                      <% if member[:is_3d_model] %><span class="badge bg-primary">3D</span><% end %>
+                      <% if member[:only_3d_in_model] %><span class="badge bg-warning text-dark">only 3D in model</span><% end %>
+                    </td>
+                    <td>
+                      <% if member[:preview_ref] %><span class="badge bg-success">preview</span><% end %>
+                      <% if member[:entrypoint_ref] %><span class="badge bg-info text-dark">entrypoint</span><% end %>
+                      <% unless member[:preview_ref] || member[:entrypoint_ref] %><span class="text-muted">none</span><% end %>
+                    </td>
+                    <td>
+                      <% if member[:storage_exists] == true %>
+                        <span class="badge bg-success">Exists</span>
+                      <% elsif member[:storage_exists] == false %>
+                        <span class="badge bg-danger">Missing</span>
+                      <% else %>
+                        <span class="badge bg-secondary">Unknown</span>
+                      <% end %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
 
-        <div class="mt-3">
-          <button class="btn btn-sm btn-outline-secondary" disabled>Apply duplicate cleanup disabled</button>
-          <span class="small text-muted ms-2">Phase 4.6 will enable explicit canonical selection and revalidated cleanup.</span>
-        </div>
+          <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+            <%= submit_tag "Remove Selected Same-Model Duplicates",
+                  class: "btn btn-sm btn-danger duplicate-submit",
+                  disabled: true,
+                  data: {turbo_confirm: "Remove the selected redundant physical files and database records only after server-side digest/model/storage revalidation? The selected canonical copy will be retained."} %>
+            <span class="small text-muted duplicate-help">Choose a canonical copy. Only existing copies from that same model will become selectable.</span>
+          </div>
+        <% end %>
       </div>
     </div>
   <% end %>
@@ -112,3 +149,39 @@
     <div class="alert alert-success">No duplicate digest sets remain.</div>
   <% end %>
 </div>
+
+<script>
+  (() => {
+    document.querySelectorAll(".duplicate-cleanup-form").forEach((form) => {
+      const radios = Array.from(form.querySelectorAll(".canonical-radio"));
+      const boxes = Array.from(form.querySelectorAll(".duplicate-remove-checkbox"));
+      const submit = form.querySelector(".duplicate-submit");
+      const help = form.querySelector(".duplicate-help");
+
+      const refresh = () => {
+        const canonical = radios.find((radio) => radio.checked);
+        const canonicalId = canonical ? canonical.value : null;
+        const modelId = canonical ? canonical.dataset.modelId : null;
+        let eligible = 0;
+
+        boxes.forEach((box) => {
+          const allowed = canonical && box.dataset.modelId === modelId && box.dataset.fileId !== canonicalId;
+          box.disabled = !allowed;
+          if (!allowed) box.checked = false;
+          if (allowed) eligible += 1;
+        });
+
+        if (submit) submit.disabled = !(eligible > 0 && boxes.some((box) => box.checked));
+        if (help) {
+          help.textContent = canonical
+            ? `${eligible} same-model existing duplicate(s) eligible for selection.`
+            : "Choose a canonical copy. Only existing copies from that same model will become selectable.";
+        }
+      };
+
+      radios.forEach((radio) => radio.addEventListener("change", refresh));
+      boxes.forEach((box) => box.addEventListener("change", refresh));
+      refresh();
+    });
+  })();
+</script>

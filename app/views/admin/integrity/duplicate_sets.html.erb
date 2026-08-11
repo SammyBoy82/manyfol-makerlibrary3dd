@@ -28,8 +28,8 @@
   </div>
 
   <% @report.sets.each_with_index do |set, index| %>
-    <% form_id = "duplicate-set-#{index}" %>
     <% actionable = set[:cleanup_candidate] %>
+    <% canonical_id = set[:recommended_id] %>
 
     <div class="card mb-4 <%= 'border-success' if actionable %>">
       <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -58,10 +58,11 @@
           <div class="alert alert-success py-2">
             <strong>Why this needs cleanup:</strong> <%= set[:explanation] %>
           </div>
-          <% if set[:recommended_id] %>
-            <div class="mb-3">
-              <span class="badge bg-success">Suggested copy to KEEP: ModelFile #<%= set[:recommended_id] %></span>
-              <span class="small text-muted ms-2"><%= set[:recommendation_reason] %></span>
+          <% if canonical_id %>
+            <div class="alert alert-light border py-2 mb-3">
+              <strong>KEEP ModelFile #<%= canonical_id %>.</strong>
+              <%= set[:recommendation_reason] %>.
+              The other row(s) below are byte-for-byte identical copies inside the same catalogue model and can be deleted individually.
             </div>
           <% end %>
         <% else %>
@@ -71,104 +72,82 @@
           </div>
         <% end %>
 
-        <%= form_with url: admin_integrity_remove_duplicates_path,
-              method: :post,
-              local: true,
-              id: form_id,
-              class: "duplicate-cleanup-form",
-              data: {actionable: actionable.to_s} do %>
-          <div class="table-responsive">
-            <table class="table table-sm table-striped align-middle mb-0">
-              <thead>
-                <tr>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <% if actionable %><th style="width:180px;">Action</th><% end %>
+                <th>ModelFile</th>
+                <th>Catalogue Model / Library</th>
+                <th>Filename / Path</th>
+                <th>Type</th>
+                <th>Used By</th>
+                <th>Storage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% set[:members].each do |member| %>
+                <% existing = member[:storage_exists] == true %>
+                <% is_canonical = member[:id] == canonical_id %>
+                <tr class="<%= 'table-success' if actionable && is_canonical %>">
                   <% if actionable %>
-                    <th style="width:120px;">KEEP this copy</th>
-                    <th style="width:140px;">DELETE duplicate</th>
-                  <% end %>
-                  <th>ModelFile</th>
-                  <th>Catalogue Model / Library</th>
-                  <th>Filename / Path</th>
-                  <th>Type</th>
-                  <th>Used By</th>
-                  <th>Storage</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% set[:members].each do |member| %>
-                  <% existing = member[:storage_exists] == true %>
-                  <tr class="<%= 'table-success' if actionable && member[:id] == set[:recommended_id] %>">
-                    <% if actionable %>
-                      <td>
-                        <% if existing %>
-                          <%= radio_button_tag "canonical_id",
-                                member[:id],
-                                member[:id] == set[:recommended_id],
-                                class: "canonical-radio",
-                                data: {model_id: member[:model_id]} %>
-                        <% else %>
-                          <span class="text-muted">Unavailable</span>
-                        <% end %>
-                      </td>
-                      <td>
-                        <% if existing %>
-                          <%= check_box_tag "remove_ids[]",
-                                member[:id],
-                                false,
-                                class: "duplicate-remove-checkbox",
-                                disabled: true,
-                                data: {model_id: member[:model_id], file_id: member[:id]} %>
-                        <% else %>
-                          <span class="text-muted">Unavailable</span>
-                        <% end %>
-                      </td>
-                    <% end %>
-
                     <td>
-                      <code>#<%= member[:id] %></code>
-                      <% if member[:problem_id] %><div class="small text-muted">duplicate flag #<%= member[:problem_id] %></div><% end %>
-                    </td>
-                    <td>
-                      <div><strong><%= member[:model_name].presence || "-" %></strong></div>
-                      <div class="small text-muted">Model #<%= member[:model_id] || '-' %> · <%= member[:library].presence || '-' %></div>
-                    </td>
-                    <td style="max-width: 560px;">
-                      <div><strong><%= member[:filename] %></strong></div>
-                      <code class="small text-break"><%= member[:path] %></code>
-                    </td>
-                    <td>
-                      <span class="badge bg-light text-dark border"><%= member[:extension].presence || '-' %></span>
-                      <% if member[:is_3d_model] %><span class="badge bg-primary">3D</span><% end %>
-                      <% if member[:only_3d_in_model] %><span class="badge bg-warning text-dark">only 3D in model</span><% end %>
-                    </td>
-                    <td>
-                      <% if member[:preview_ref] %><span class="badge bg-success">preview</span><% end %>
-                      <% if member[:entrypoint_ref] %><span class="badge bg-info text-dark">entrypoint</span><% end %>
-                      <% unless member[:preview_ref] || member[:entrypoint_ref] %><span class="text-muted">none</span><% end %>
-                    </td>
-                    <td>
-                      <% if member[:storage_exists] == true %>
-                        <span class="badge bg-success">Exists</span>
-                      <% elsif member[:storage_exists] == false %>
-                        <span class="badge bg-danger">Missing</span>
+                      <% if is_canonical %>
+                        <span class="badge bg-success">KEEP THIS COPY</span>
+                      <% elsif existing && canonical_id %>
+                        <%= button_to "Delete this redundant copy",
+                              admin_integrity_remove_duplicates_path,
+                              method: :post,
+                              params: {canonical_id: canonical_id, remove_ids: [member[:id]]},
+                              class: "btn btn-sm btn-danger",
+                              data: {turbo_confirm: "Delete ModelFile ##{member[:id]} as a redundant same-model duplicate? ModelFile ##{canonical_id} will be kept. The server will revalidate digest, model identity and storage before deletion."} %>
                       <% else %>
-                        <span class="badge bg-secondary">Unknown</span>
+                        <span class="text-muted">Unavailable</span>
                       <% end %>
                     </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
+                  <% end %>
 
-          <% if actionable %>
-            <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
-              <%= submit_tag "Delete Selected Redundant Copies",
-                    class: "btn btn-sm btn-danger duplicate-submit",
-                    disabled: true,
-                    data: {turbo_confirm: "Delete only the selected redundant same-model copies after server-side digest/model/storage revalidation? The chosen KEEP copy will remain."} %>
-              <span class="small text-muted duplicate-help">Step 1: choose the copy to KEEP. Step 2: tick one or more other copies to DELETE.</span>
-            </div>
-          <% end %>
+                  <td>
+                    <code>#<%= member[:id] %></code>
+                    <% if member[:problem_id] %><div class="small text-muted">duplicate flag #<%= member[:problem_id] %></div><% end %>
+                  </td>
+                  <td>
+                    <div><strong><%= member[:model_name].presence || "-" %></strong></div>
+                    <div class="small text-muted">Model #<%= member[:model_id] || '-' %> · <%= member[:library].presence || '-' %></div>
+                  </td>
+                  <td style="max-width: 560px;">
+                    <div><strong><%= member[:filename] %></strong></div>
+                    <code class="small text-break"><%= member[:path] %></code>
+                  </td>
+                  <td>
+                    <span class="badge bg-light text-dark border"><%= member[:extension].presence || '-' %></span>
+                    <% if member[:is_3d_model] %><span class="badge bg-primary">3D</span><% end %>
+                    <% if member[:only_3d_in_model] %><span class="badge bg-warning text-dark">only 3D in model</span><% end %>
+                  </td>
+                  <td>
+                    <% if member[:preview_ref] %><span class="badge bg-success">preview</span><% end %>
+                    <% if member[:entrypoint_ref] %><span class="badge bg-info text-dark">entrypoint</span><% end %>
+                    <% unless member[:preview_ref] || member[:entrypoint_ref] %><span class="text-muted">none</span><% end %>
+                  </td>
+                  <td>
+                    <% if member[:storage_exists] == true %>
+                      <span class="badge bg-success">Exists</span>
+                    <% elsif member[:storage_exists] == false %>
+                      <span class="badge bg-danger">Missing</span>
+                    <% else %>
+                      <span class="badge bg-secondary">Unknown</span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+
+        <% if actionable %>
+          <div class="small text-muted mt-2">
+            No JavaScript selection is required. Delete redundant copies one at a time. The green KEEP row is never submitted for deletion.
+          </div>
         <% end %>
       </div>
     </div>
@@ -178,40 +157,3 @@
     <div class="alert alert-success">No duplicate digest sets remain.</div>
   <% end %>
 </div>
-
-<script>
-  (() => {
-    document.querySelectorAll(".duplicate-cleanup-form[data-actionable='true']").forEach((form) => {
-      const radios = Array.from(form.querySelectorAll(".canonical-radio"));
-      const boxes = Array.from(form.querySelectorAll(".duplicate-remove-checkbox"));
-      const submit = form.querySelector(".duplicate-submit");
-      const help = form.querySelector(".duplicate-help");
-
-      const refresh = () => {
-        const canonical = radios.find((radio) => radio.checked);
-        const canonicalId = canonical ? canonical.value : null;
-        const modelId = canonical ? canonical.dataset.modelId : null;
-        let eligible = 0;
-
-        boxes.forEach((box) => {
-          const allowed = canonical && box.dataset.modelId === modelId && box.dataset.fileId !== canonicalId;
-          box.disabled = !allowed;
-          if (!allowed) box.checked = false;
-          if (allowed) eligible += 1;
-        });
-
-        const selected = boxes.filter((box) => box.checked).length;
-        if (submit) submit.disabled = selected === 0;
-        if (help) {
-          help.textContent = canonical
-            ? `KEEP ModelFile #${canonicalId}. ${eligible} redundant same-model copy/copies are eligible; tick the ones you want to DELETE.`
-            : "Step 1: choose the copy to KEEP. Step 2: tick one or more other copies to DELETE.";
-        }
-      };
-
-      radios.forEach((radio) => radio.addEventListener("change", refresh));
-      boxes.forEach((box) => box.addEventListener("change", refresh));
-      refresh();
-    });
-  })();
-</script>

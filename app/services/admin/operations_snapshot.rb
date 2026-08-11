@@ -1,12 +1,14 @@
 require "etc"
 require "open3"
 require "sidekiq/api"
+require "sys/filesystem"
 
 module Admin
   class OperationsSnapshot
     Result = Struct.new(
       :hostname,
       :uptime_seconds,
+      :host_cpu_percent,
       :load_1,
       :load_5,
       :load_15,
@@ -14,9 +16,19 @@ module Admin
       :memory_total_bytes,
       :memory_available_bytes,
       :memory_used_percent,
+      :swap_total_bytes,
+      :swap_used_bytes,
       :disk_total_bytes,
       :disk_available_bytes,
       :disk_used_percent,
+      :container_cpu_percent,
+      :container_memory_bytes,
+      :container_memory_limit_bytes,
+      :container_memory_percent,
+      :container_uptime_seconds,
+      :container_pids,
+      :container_network_rx_bytes,
+      :container_network_tx_bytes,
       :redis_ok,
       :postgres_ok,
       :database_size_bytes,
@@ -30,6 +42,7 @@ module Admin
       :model_files,
       :problems_total,
       :problems_by_category,
+      :library_storage,
       keyword_init: true
     )
 
@@ -40,13 +53,15 @@ module Admin
     def call
       load = load_average
       memory = memory_status
-      disk = disk_status
+      disk = disk_status("/")
       postgres = postgres_status
       sidekiq = sidekiq_status
+      container = container_status
 
       Result.new(
         hostname: ENV.fetch("HOSTNAME", Socket.gethostname),
         uptime_seconds: uptime_seconds,
+        host_cpu_percent: host_cpu_percent,
         load_1: load[0],
         load_5: load[1],
         load_15: load[2],
@@ -54,9 +69,19 @@ module Admin
         memory_total_bytes: memory[:total],
         memory_available_bytes: memory[:available],
         memory_used_percent: memory[:used_percent],
+        swap_total_bytes: memory[:swap_total],
+        swap_used_bytes: memory[:swap_used],
         disk_total_bytes: disk[:total],
         disk_available_bytes: disk[:available],
         disk_used_percent: disk[:used_percent],
+        container_cpu_percent: container[:cpu_percent],
+        container_memory_bytes: container[:memory],
+        container_memory_limit_bytes: container[:memory_limit],
+        container_memory_percent: container[:memory_percent],
+        container_uptime_seconds: container[:uptime],
+        container_pids: container[:pids],
+        container_network_rx_bytes: container[:network_rx],
+        container_network_tx_bytes: container[:network_tx],
         redis_ok: redis_ok?,
         postgres_ok: postgres[:ok],
         database_size_bytes: postgres[:size],
@@ -69,7 +94,8 @@ module Admin
         models: Model.count,
         model_files: ModelFile.count,
         problems_total: Problem.count,
-        problems_by_category: Problem.group(:category).count
+        problems_by_category: Problem.group(:category).count,
+        library_storage: library_storage_status
       )
     end
 
@@ -87,6 +113,31 @@ module Admin
       0.0
     end
 
+    def host_cpu_percent
+      first = cpu_ticks
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      sleep 0.15
+      second = cpu_ticks
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      return 0.0 if elapsed <= 0 || first.nil? || second.nil?
+
+      total_delta = second[:total] - first[:total]
+      idle_delta = second[:idle] - first[:idle]
+      return 0.0 unless total_delta.positive?
+
+      (((total_delta - idle_delta).to_f / total_delta) * 100).round(1)
+    rescue
+      0.0
+    end
+
+    def cpu_ticks
+      fields = File.readlines("/proc/stat").find { |line| line.start_with?("cpu ") }.split.drop(1).map(&:to_i)
+      idle = fields[3].to_i + fields[4].to_i
+      {total: fields.sum, idle: idle}
+    rescue
+      nil
+    end
+
     def memory_status
       data = {}
       File.readlines("/proc/meminfo").each do |line|
@@ -97,14 +148,22 @@ module Admin
       total = data.fetch("MemTotal", 0)
       available = data.fetch("MemAvailable", 0)
       used_percent = total.positive? ? (((total - available).to_f / total) * 100).round(1) : 0.0
+      swap_total = data.fetch("SwapTotal", 0)
+      swap_free = data.fetch("SwapFree", 0)
 
-      {total: total, available: available, used_percent: used_percent}
+      {
+        total: total,
+        available: available,
+        used_percent: used_percent,
+        swap_total: swap_total,
+        swap_used: [swap_total - swap_free, 0].max
+      }
     rescue
-      {total: 0, available: 0, used_percent: 0.0}
+      {total: 0, available: 0, used_percent: 0.0, swap_total: 0, swap_used: 0}
     end
 
-    def disk_status
-      stdout, status = Open3.capture2("df", "-Pk", "/")
+    def disk_status(path)
+      stdout, status = Open3.capture2("df", "-Pk", path.to_s)
       return {total: 0, available: 0, used_percent: 0.0} unless status.success?
 
       fields = stdout.lines.last.to_s.split
@@ -115,6 +174,137 @@ module Admin
       {total: total, available: available, used_percent: used_percent}
     rescue
       {total: 0, available: 0, used_percent: 0.0}
+    end
+
+    def container_status
+      memory = read_integer("/sys/fs/cgroup/memory.current")
+      memory_limit_raw = File.read("/sys/fs/cgroup/memory.max").strip rescue nil
+      memory_limit = memory_limit_raw == "max" ? 0 : memory_limit_raw.to_i
+      memory_percent = memory_limit.positive? ? ((memory.to_f / memory_limit) * 100).round(1) : 0.0
+
+      {
+        cpu_percent: container_cpu_percent,
+        memory: memory,
+        memory_limit: memory_limit,
+        memory_percent: memory_percent,
+        uptime: container_uptime,
+        pids: read_integer("/sys/fs/cgroup/pids.current"),
+        network_rx: container_network[:rx],
+        network_tx: container_network[:tx]
+      }
+    rescue
+      {
+        cpu_percent: 0.0,
+        memory: 0,
+        memory_limit: 0,
+        memory_percent: 0.0,
+        uptime: 0.0,
+        pids: 0,
+        network_rx: 0,
+        network_tx: 0
+      }
+    end
+
+    def container_cpu_percent
+      first = cgroup_cpu_usage_usec
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      sleep 0.15
+      second = cgroup_cpu_usage_usec
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      return 0.0 if elapsed <= 0 || second <= first
+
+      capacity = elapsed * 1_000_000 * [Etc.nprocessors, 1].max
+      (((second - first).to_f / capacity) * 100).round(1)
+    rescue
+      0.0
+    end
+
+    def cgroup_cpu_usage_usec
+      line = File.readlines("/sys/fs/cgroup/cpu.stat").find { |entry| entry.start_with?("usage_usec ") }
+      line.to_s.split.last.to_i
+    rescue
+      0
+    end
+
+    def container_uptime
+      stat = File.read("/proc/1/stat").split
+      start_ticks = stat[21].to_f
+      ticks_per_second = Etc.sysconf(Etc::SC_CLK_TCK).to_f
+      return 0.0 unless ticks_per_second.positive?
+
+      [uptime_seconds - (start_ticks / ticks_per_second), 0.0].max
+    rescue
+      0.0
+    end
+
+    def container_network
+      rx = 0
+      tx = 0
+      File.readlines("/proc/net/dev").drop(2).each do |line|
+        interface, data = line.split(":", 2)
+        next if interface.to_s.strip == "lo"
+
+        fields = data.to_s.split
+        rx += fields[0].to_i
+        tx += fields[8].to_i
+      end
+      {rx: rx, tx: tx}
+    rescue
+      {rx: 0, tx: 0}
+    end
+
+    def read_integer(path)
+      File.read(path).strip.to_i
+    rescue
+      0
+    end
+
+    def library_storage_status
+      Library.all.map do |library|
+        if library.storage_service == "filesystem"
+          stat = Sys::Filesystem.stat(library.path)
+          total = stat.block_size * stat.blocks
+          available = stat.bytes_available
+          used = [total - available, 0].max
+          used_percent = total.positive? ? ((used.to_f / total) * 100).round(1) : 0.0
+
+          {
+            id: library.id,
+            name: library.name,
+            service: library.storage_service,
+            path: library.path,
+            total: total,
+            available: available,
+            used: used,
+            used_percent: used_percent,
+            models: library.models.count,
+            files: library.model_files.count
+          }
+        else
+          {
+            id: library.id,
+            name: library.name,
+            service: library.storage_service,
+            path: library.path,
+            total: nil,
+            available: library.free_space,
+            used: nil,
+            used_percent: nil,
+            models: library.models.count,
+            files: library.model_files.count
+          }
+        end
+      rescue => error
+        {
+          id: library.id,
+          name: library.name,
+          service: library.storage_service,
+          path: library.path,
+          error: error.class.name,
+          models: library.models.count,
+          files: library.model_files.count
+        }
+      end
     end
 
     def redis_ok?

@@ -80,6 +80,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#duplicate_sets",
     as: :admin_integrity_duplicate_sets
 
+  post "/admin/integrity/duplicates/remove",
+    to: "admin/integrity#remove_duplicates",
+    as: :admin_integrity_remove_duplicates
+
   get "/admin/integrity/preview/:category",
     to: "admin/integrity#preview",
     as: :admin_integrity_preview,

@@ -11,6 +11,12 @@ module Admin
       @snapshot = Admin::OperationsSnapshot.call
     end
 
+    def control_center
+      skip_policy_scope
+      skip_authorization
+      @snapshot = Admin::OperationsSnapshot.call
+    end
+
     def dead_jobs
       skip_policy_scope
       skip_authorization

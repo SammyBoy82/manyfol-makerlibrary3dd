@@ -1,0 +1,52 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1"><%= @category.humanize %> Problems</h1>
+      <p class="text-muted mb-0">Showing up to 500 open problems in this category.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Control Center", admin_operations_control_center_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Admin Operations", admin_operations_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Problematic Type</th>
+          <th>Problematic ID</th>
+          <th>Parent / Model</th>
+          <th>Resolution</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if @problems.any? %>
+          <% @problems.each do |problem| %>
+            <% parent = (problem.parent rescue nil) %>
+            <tr>
+              <td><%= problem.id %></td>
+              <td><%= problem.problematic_type %></td>
+              <td><%= problem.problematic_id %></td>
+              <td>
+                <% if parent.respond_to?(:name) %>
+                  <strong><%= parent.name %></strong>
+                <% elsif parent %>
+                  <%= parent.to_s %>
+                <% else %>
+                  -
+                <% end %>
+              </td>
+              <td><span class="badge bg-secondary"><%= problem.resolution_strategy.to_s.humanize rescue "Unknown" %></span></td>
+              <td><%= time_ago_in_words(problem.created_at) %> ago</td>
+            </tr>
+          <% end %>
+        <% else %>
+          <tr><td colspan="6" class="text-muted">No open problems in this category.</td></tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

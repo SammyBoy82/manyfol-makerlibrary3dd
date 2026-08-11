@@ -14,7 +14,7 @@
   </div>
 
   <div class="alert alert-info">
-    Phase 4 workflow: <strong>Analyze → Preview → Apply</strong>. This first release implements Analyze only.
+    Phase 4 workflow: <strong>Analyze → Preview → Apply</strong>. Preview is now available for Missing, Duplicate, and Nesting. Apply remains disabled.
   </div>
 
   <div class="row g-3 mb-4">
@@ -31,7 +31,7 @@
           <strong><%= group[:category].humanize %></strong>
           <span class="badge bg-secondary ms-2"><%= group[:count] %></span>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-center">
           <% badge_class = case group[:risk]
             when :danger then "bg-danger"
             when :warning then "bg-warning text-dark"
@@ -40,6 +40,11 @@
           end %>
           <span class="badge <%= badge_class %>"><%= group[:risk].to_s.humanize %></span>
           <span class="badge bg-light text-dark border"><%= group[:mode].to_s.humanize %></span>
+          <% if Admin::IntegrityPreview::SUPPORTED_CATEGORIES.include?(group[:category]) %>
+            <%= link_to "Preview",
+                  admin_integrity_preview_path(group[:category]),
+                  class: "btn btn-sm btn-outline-primary" %>
+          <% end %>
         </div>
       </div>
 

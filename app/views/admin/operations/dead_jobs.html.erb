@@ -28,12 +28,16 @@
       <tbody>
         <% if @jobs.any? %>
           <% @jobs.each do |job| %>
+            <% item = job.item || {} %>
+            <% error_message = item["error_message"].presence || "Unknown error" %>
+            <% failed_raw = item["failed_at"] %>
+            <% failed_time = failed_raw.present? ? Time.at(failed_raw.to_f / 1000.0) : nil %>
             <tr>
               <td><code><%= job.jid %></code></td>
               <td><%= job.display_class %></td>
               <td><span class="badge bg-secondary"><%= job.queue %></span></td>
-              <td style="max-width: 520px;"><div class="text-break"><%= job.error_message %></div></td>
-              <td><%= job.failed_at ? time_ago_in_words(job.failed_at) + " ago" : "-" %></td>
+              <td style="max-width: 520px;"><div class="text-break"><%= error_message %></div></td>
+              <td><%= failed_time ? time_ago_in_words(failed_time) + " ago" : "-" %></td>
               <td>
                 <div class="d-flex flex-wrap gap-1">
                   <%= button_to "Retry", admin_operations_retry_dead_job_path(job.jid), method: :post, class: "btn btn-sm btn-warning", data: {turbo_confirm: "Retry this job?"} %>

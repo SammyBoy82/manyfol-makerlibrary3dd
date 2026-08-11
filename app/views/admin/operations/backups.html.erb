@@ -1,0 +1,102 @@
+<meta http-equiv="refresh" content="30">
+
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Backup Management</h1>
+      <p class="text-muted mb-0">Run backups manually, download completed backup bundles, and configure an optional secondary destination.</p>
+      <div class="small text-muted mt-1">Auto-refresh: every 30 seconds</div>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Control Center", admin_operations_control_center_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Admin Operations", admin_operations_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header"><strong>Manual Backup</strong></div>
+        <div class="card-body">
+          <p class="text-muted">Creates the same full application/database/config backup used by the scheduled job.</p>
+          <% if @manual_request_pending %>
+            <div class="alert alert-warning">A manual backup request is waiting for the host backup service.</div>
+          <% end %>
+          <%= button_to "Backup Now",
+                admin_operations_request_backup_path,
+                method: :post,
+                class: "btn btn-primary",
+                disabled: @manual_request_pending,
+                data: {turbo_confirm: "Start a MakerLibrary3D backup now?"} %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header"><strong>Secondary Backup Destination</strong></div>
+        <div class="card-body">
+          <p class="text-muted">
+            The normal backup remains in the default archive folder. Optionally copy each completed backup bundle to another host path, mounted disk, NAS mount, or other server filesystem location.
+          </p>
+          <%= form_with url: admin_operations_backup_settings_path, method: :patch, local: true do %>
+            <div class="input-group">
+              <%= text_field_tag :secondary_destination,
+                    @secondary_destination,
+                    class: "form-control font-monospace",
+                    placeholder: "/mnt/backup-drive/makerlibrary3d" %>
+              <%= submit_tag "Save Location", class: "btn btn-outline-primary" %>
+            </div>
+            <div class="form-text">Leave blank and save to disable the secondary copy. The path must exist or be creatable by the host backup service.</div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Downloadable Backups</strong>
+      <span class="badge bg-secondary"><%= @packages.size %> shown</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Backup</th>
+              <th>Created</th>
+              <th>Size</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if @packages.any? %>
+              <% @packages.each do |package| %>
+                <tr>
+                  <td><code><%= package.basename %></code></td>
+                  <td><%= l(package.mtime, format: :long) rescue package.mtime %></td>
+                  <td><%= number_to_human_size(package.size) %></td>
+                  <td>
+                    <%= link_to "Download",
+                          admin_operations_download_backup_path(package.basename.to_s),
+                          class: "btn btn-sm btn-outline-primary",
+                          data: {turbo: false} %>
+                  </td>
+                </tr>
+              <% end %>
+            <% else %>
+              <tr>
+                <td colspan="4" class="text-muted">No packaged backups are available yet.</td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info mt-4 mb-0">
+    Backup bundles can contain the database, application configuration, and environment settings. Downloads are restricted to administrator accounts and should be stored securely.
+  </div>
+</div>

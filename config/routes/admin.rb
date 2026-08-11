@@ -31,6 +31,26 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/operations#index",
     as: :admin_operations
 
+  get "/admin/operations/dead-jobs",
+    to: "admin/operations#dead_jobs",
+    as: :admin_operations_dead_jobs
+
+  post "/admin/operations/dead-jobs/:jid/retry",
+    to: "admin/operations#retry_dead_job",
+    as: :admin_operations_retry_dead_job
+
+  delete "/admin/operations/dead-jobs/:jid",
+    to: "admin/operations#delete_dead_job",
+    as: :admin_operations_delete_dead_job
+
+  delete "/admin/operations/dead-jobs",
+    to: "admin/operations#clear_dead_jobs",
+    as: :admin_operations_clear_dead_jobs
+
+  get "/admin/operations/problems/:category",
+    to: "admin/operations#problems",
+    as: :admin_operations_problems
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

@@ -1,0 +1,111 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Admin Operations</h1>
+      <p class="text-muted mb-0">Server, database, Redis, Sidekiq, and library integrity overview.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Sidekiq", "/admin/sidekiq", class: "btn btn-outline-secondary" %>
+      <%= link_to "Performance", "/admin/performance", class: "btn btn-outline-secondary" %>
+      <% if defined?(PgHero) %>
+        <%= link_to "PgHero", "/admin/pghero", class: "btn btn-outline-secondary" %>
+      <% end %>
+    </div>
+  </div>
+
+  <h2 class="h5 mb-3">Server Health</h2>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">CPU Load</div>
+      <div class="h4 mb-0"><%= @snapshot.load_1 %></div>
+      <div class="small text-muted"><%= @snapshot.cpu_count %> CPU &middot; 5m <%= @snapshot.load_5 %> &middot; 15m <%= @snapshot.load_15 %></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Memory Used</div>
+      <div class="h4 mb-0"><%= @snapshot.memory_used_percent %>%</div>
+      <div class="small text-muted"><%= number_to_human_size(@snapshot.memory_available_bytes) %> available</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Disk Used</div>
+      <div class="h4 mb-0"><%= @snapshot.disk_used_percent %>%</div>
+      <div class="small text-muted"><%= number_to_human_size(@snapshot.disk_available_bytes) %> free</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Uptime</div>
+      <div class="h4 mb-0"><%= distance_of_time_in_words(@snapshot.uptime_seconds) %></div>
+      <div class="small text-muted"><%= @snapshot.hostname %></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Redis</div>
+      <div class="h4 mb-0"><span class="badge <%= @snapshot.redis_ok ? 'bg-success' : 'bg-danger' %>"><%= @snapshot.redis_ok ? 'Healthy' : 'Down' %></span></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">PostgreSQL</div>
+      <div class="h4 mb-0"><span class="badge <%= @snapshot.postgres_ok ? 'bg-success' : 'bg-danger' %>"><%= @snapshot.postgres_ok ? 'Healthy' : 'Down' %></span></div>
+      <div class="small text-muted"><%= @snapshot.database_connections %> connections</div>
+    </div></div></div>
+  </div>
+
+  <h2 class="h5 mb-3">Database & Library</h2>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Database Size</div><div class="h4 mb-0"><%= number_to_human_size(@snapshot.database_size_bytes) %></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Models</div><div class="h4 mb-0"><%= @snapshot.models %></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Model Files</div><div class="h4 mb-0"><%= @snapshot.model_files %></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Open Problems</div><div class="h4 mb-0"><%= @snapshot.problems_total %></div></div></div></div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header"><strong>Sidekiq Queues</strong></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+              <thead><tr><th>Queue</th><th>Jobs</th></tr></thead>
+              <tbody>
+                <% @snapshot.queues.each do |name, count| %>
+                  <tr><td><%= name %></td><td><span class="badge <%= count.to_i.zero? ? 'bg-success' : 'bg-warning text-dark' %>"><%= count %></span></td></tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer small text-muted">
+          Processes: <%= @snapshot.sidekiq_processes %> &middot; Retries: <%= @snapshot.retries %> &middot; Scheduled: <%= @snapshot.scheduled %> &middot; Dead: <%= @snapshot.dead %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header"><strong>Problem Categories</strong></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+              <thead><tr><th>Category</th><th>Count</th></tr></thead>
+              <tbody>
+                <% if @snapshot.problems_by_category.any? %>
+                  <% @snapshot.problems_by_category.sort_by { |name, _| name.to_s }.each do |name, count| %>
+                    <tr><td><%= name.to_s.humanize %></td><td><span class="badge bg-secondary"><%= count %></span></td></tr>
+                  <% end %>
+                <% else %>
+                  <tr><td colspan="2" class="text-muted">No open problems.</td></tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info mb-0">
+    Host-level Docker management is intentionally not exposed to the Rails container. This avoids mounting the Docker socket into the web application. Container/image cleanup remains a server-admin operation over SSH.
+  </div>
+</div>

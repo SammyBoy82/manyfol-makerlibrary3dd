@@ -35,6 +35,18 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/media_maintenance#missing_sources",
     as: :admin_media_maintenance_missing_sources
 
+  post "/admin/media-maintenance/:library_id/rescan",
+    to: "admin/media_maintenance#rescan",
+    as: :admin_media_maintenance_rescan
+
+  post "/admin/media-maintenance/:library_id/repair-stale",
+    to: "admin/media_maintenance#repair_stale",
+    as: :admin_media_maintenance_repair_stale
+
+  post "/admin/media-maintenance/:library_id/repair-orphans",
+    to: "admin/media_maintenance#repair_orphans",
+    as: :admin_media_maintenance_repair_orphans
+
   post "/admin/media-maintenance/:library_id/regenerate-missing",
     to: "admin/media_maintenance#regenerate_missing",
     as: :admin_media_maintenance_regenerate_missing

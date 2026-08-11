@@ -32,6 +32,24 @@ module Admin
         alert: "Stale cleanup is not available for that integrity category."
     end
 
+    def remove_missing_records
+      skip_authorization
+
+      selected = params[:problem_ids]
+      if selected.blank?
+        redirect_to admin_integrity_preview_path("missing"), alert: "Select at least one confirmed missing record."
+        return
+      end
+
+      result = Admin::MissingRecordRemover.call(selected)
+      message = "Requested #{result.requested}; removed #{result.removed} confirmed missing database record(s); skipped #{result.skipped}."
+      message += " Cleared #{result.preview_refs_cleared} preview reference(s)." if result.preview_refs_cleared.positive?
+      message += " Cleared #{result.entrypoint_refs_cleared} entrypoint reference(s)." if result.entrypoint_refs_cleared.positive?
+      message += " #{result.errors.size} error(s) were left untouched." if result.errors.any?
+
+      redirect_to admin_integrity_preview_path("missing"), notice: message
+    end
+
     private
 
     def require_administrator!

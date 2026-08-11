@@ -16,6 +16,7 @@ module Admin
 
       digests = duplicate_files.map(&:digest).uniq.first(LIMIT)
       sets = digests.filter_map { |digest| build_set(digest) }
+      sets.sort_by! { |set| [set[:cleanup_candidate] ? 0 : 1, set[:models].size, set[:digest].to_s] }
 
       Result.new(
         generated_at: Time.current,
@@ -33,7 +34,23 @@ module Admin
 
       members = files.map { |file| member(file) }
       existing = members.select { |m| m[:storage_exists] == true }
-      recommended = choose_recommended(existing)
+      models = members.map { |m| m[:model_id] }.compact.uniq
+      libraries = members.map { |m| m[:library] }.compact.uniq
+      same_model_only = models.one?
+      cleanup_candidate = same_model_only && existing.size > 1
+      recommended = cleanup_candidate ? choose_recommended(existing) : nil
+
+      classification = if cleanup_candidate
+        :same_model_redundant
+      elsif models.size > 1 && libraries.size > 1
+        :shared_cross_library
+      elsif models.size > 1
+        :shared_cross_model
+      elsif existing.size < 2
+        :insufficient_existing_copies
+      else
+        :review_only
+      end
 
       {
         digest: digest,
@@ -42,9 +59,12 @@ module Admin
         member_count: members.size,
         existing_count: existing.size,
         missing_count: members.count { |m| m[:storage_exists] == false },
-        libraries: members.map { |m| m[:library] }.compact.uniq,
-        models: members.map { |m| m[:model_id] }.compact.uniq,
-        same_model_only: members.map { |m| m[:model_id] }.compact.uniq.one?,
+        libraries: libraries,
+        models: models,
+        same_model_only: same_model_only,
+        cleanup_candidate: cleanup_candidate,
+        classification: classification,
+        explanation: explanation_for(classification, members),
         recommended_id: recommended&.dig(:id),
         recommendation_reason: recommendation_reason(recommended)
       }
@@ -90,8 +110,23 @@ module Admin
       end
     end
 
+    def explanation_for(classification, members)
+      case classification
+      when :same_model_redundant
+        "The same model contains more than one existing file with exactly identical content. This is a real cleanup candidate. Keep one copy and remove only the redundant copy or copies from this same model."
+      when :shared_cross_model
+        "These files have different names or paths, but their binary contents are exactly identical. They belong to different catalogue models, so this is treated as a shared/reused asset, not a cleanup candidate. No action is recommended."
+      when :shared_cross_library
+        "These files are byte-for-byte identical but belong to different catalogue models and different libraries. They are protected shared/reused assets. No action is recommended."
+      when :insufficient_existing_copies
+        "Fewer than two physical copies currently exist, so there is nothing safe to deduplicate. Review only."
+      else
+        "The files share the same exact digest, but this set is not eligible for automatic cleanup. Review only."
+      end
+    end
+
     def recommendation_reason(member)
-      return "No existing copy available" unless member
+      return nil unless member
       return "Currently used as a model preview" if member[:preview_ref]
       return "Currently used as an entrypoint" if member[:entrypoint_ref]
       return "Only 3D file in its model" if member[:only_3d_in_model]

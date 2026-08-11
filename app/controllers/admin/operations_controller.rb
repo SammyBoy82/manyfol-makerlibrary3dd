@@ -7,6 +7,7 @@ module Admin
     BACKUP_PACKAGES = BACKUP_ROOT.join("packages").freeze
     MANUAL_REQUEST = BACKUP_ROOT.join(".manual-backup-request").freeze
     SECONDARY_DESTINATION = BACKUP_ROOT.join(".secondary-destination").freeze
+    ALLOWED_SECONDARY_ROOTS = %w[/srv /mnt /media /backup /var/backups].freeze
 
     before_action :authenticate_user!
     before_action :require_administrator!
@@ -59,15 +60,15 @@ module Admin
 
       destination = params[:secondary_destination].to_s.strip
 
-      if destination.present? && !destination.start_with?("/")
-        redirect_to admin_operations_backups_path,
-          alert: "Secondary destination must be an absolute host path."
-        return
-      end
-
       if destination.include?("\n") || destination.include?("\r")
         redirect_to admin_operations_backups_path,
           alert: "Secondary destination contains invalid characters."
+        return
+      end
+
+      if destination.present? && !allowed_secondary_destination?(destination)
+        redirect_to admin_operations_backups_path,
+          alert: "Secondary destination must be an absolute path under /srv, /mnt, /media, /backup, or /var/backups."
         return
       end
 
@@ -159,6 +160,11 @@ module Admin
     end
 
     private
+
+    def allowed_secondary_destination?(destination)
+      path = Pathname.new(destination).cleanpath.to_s
+      ALLOWED_SECONDARY_ROOTS.any? { |root| path == root || path.start_with?("#{root}/") }
+    end
 
     def require_administrator!
       return if current_user&.is_administrator?

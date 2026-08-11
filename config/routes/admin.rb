@@ -76,6 +76,11 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#index",
     as: :admin_integrity
 
+  get "/admin/integrity/preview/:category",
+    to: "admin/integrity#preview",
+    as: :admin_integrity_preview,
+    constraints: {category: /missing|duplicate|nesting/}
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

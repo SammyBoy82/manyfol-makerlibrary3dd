@@ -13,7 +13,7 @@
 
   <div class="alert alert-info">
     <strong>What does nesting mean?</strong>
-    A catalogue model has been detected inside another catalogue model's folder tree. This is not automatically wrong. Some folders intentionally contain sub-models. This page shows the exact parent/child structure before any merge is enabled.
+    A catalogue model has been detected inside another catalogue model's folder tree. This is not automatically wrong. Use <strong>Preview Merge Impact</strong> to see exactly what would happen before deciding whether the child should remain separate or eventually be merged into its parent.
   </div>
 
   <% parents = @report.groups.count { |g| g[:role] == :parent_with_children } %>
@@ -56,7 +56,7 @@
             <div class="fw-semibold">Parent catalogue model(s)</div>
             <div class="table-responsive mt-2">
               <table class="table table-sm table-striped align-middle mb-0">
-                <thead><tr><th>Model</th><th>Path</th><th>Files</th><th>3D</th><th>Images</th></tr></thead>
+                <thead><tr><th>Model</th><th>Path</th><th>Files</th><th>3D</th><th>Images</th><th>Decision</th></tr></thead>
                 <tbody>
                   <% group[:parent_models].each do |parent| %>
                     <tr>
@@ -65,6 +65,7 @@
                       <td><%= parent[:file_count] %></td>
                       <td><%= parent[:three_d_count] %></td>
                       <td><%= parent[:image_count] %></td>
+                      <td><%= link_to "Preview Merge Impact", admin_integrity_nesting_merge_preview_path(parent_id: parent[:id], child_id: group[:model_id]), class: "btn btn-sm btn-outline-warning" %></td>
                     </tr>
                   <% end %>
                 </tbody>
@@ -78,7 +79,7 @@
             <div class="fw-semibold">Child catalogue model(s) physically inside this folder</div>
             <div class="table-responsive mt-2">
               <table class="table table-sm table-striped align-middle mb-0">
-                <thead><tr><th>Model</th><th>Path</th><th>Files</th><th>3D</th><th>Images</th></tr></thead>
+                <thead><tr><th>Model</th><th>Path</th><th>Files</th><th>3D</th><th>Images</th><th>Decision</th></tr></thead>
                 <tbody>
                   <% group[:child_models].each do |child| %>
                     <tr>
@@ -87,6 +88,7 @@
                       <td><%= child[:file_count] %></td>
                       <td><%= child[:three_d_count] %></td>
                       <td><%= child[:image_count] %></td>
+                      <td><%= link_to "Preview Merge Impact", admin_integrity_nesting_merge_preview_path(parent_id: group[:model_id], child_id: child[:id]), class: "btn btn-sm btn-outline-warning" %></td>
                     </tr>
                   <% end %>
                 </tbody>
@@ -99,7 +101,7 @@
           <div class="alert alert-light border mb-0">No current nesting relationship exists. This is eligible for the existing safe stale-flag cleanup.</div>
         <% else %>
           <div class="alert alert-warning mb-0">
-            <strong>No merge yet.</strong> Phase 4.8 will let you choose whether each child should remain a separate catalogue model or be merged into its parent, with an exact file/metadata impact preview first.
+            <strong>Phase 4.8:</strong> merge-impact previews are available now. Actual merging remains disabled until the preview results are validated.
           </div>
         <% end %>
       </div>

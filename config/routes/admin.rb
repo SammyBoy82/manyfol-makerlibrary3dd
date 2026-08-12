@@ -134,6 +134,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/commercial_metadata#update",
     as: :admin_commercial_metadata_update
 
+  get "/admin/file-storage",
+    to: "admin/file_storage#index",
+    as: :admin_file_storage
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

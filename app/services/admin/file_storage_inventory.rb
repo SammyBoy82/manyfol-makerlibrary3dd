@@ -5,6 +5,7 @@ module Admin
       :model,
       :library,
       :storage_key,
+      :folder_name,
       :relative_path,
       :physical_path,
       :filename,
@@ -12,7 +13,6 @@ module Admin
       :size,
       :modified_at,
       :source_exists,
-      :digest,
       :has_render,
       keyword_init: true
     )
@@ -38,7 +38,6 @@ module Admin
           shown: rows.size,
           source_present: rows.count(&:source_exists),
           source_missing: rows.count { |row| !row.source_exists },
-          with_digest: rows.count { |row| row.digest.present? },
           with_render: rows.count(&:has_render),
           bytes: rows.sum { |row| row.size.to_i }
         }
@@ -57,6 +56,7 @@ module Admin
         model: model,
         library: library,
         storage_key: library.storage_key.to_s,
+        folder_name: containing_folder_name(relative_path),
         relative_path: relative_path,
         physical_path: filesystem_path(library, relative_path),
         filename: model_file.filename,
@@ -64,9 +64,15 @@ module Admin
         size: model_file.size,
         modified_at: model_file.mtime,
         source_exists: safe_source_exists?(model_file),
-        digest: model_file.digest,
         has_render: model_file.has_render?
       )
+    end
+
+    def containing_folder_name(relative_path)
+      dirname = File.dirname(relative_path.to_s)
+      return "—" if dirname.blank? || dirname == "."
+
+      File.basename(dirname)
     end
 
     def filesystem_path(library, relative_path)

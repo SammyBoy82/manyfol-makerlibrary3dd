@@ -6,6 +6,7 @@ module Admin
       physical_on physical_off
       quote_on quote_off
       featured_on featured_off
+      publish_on publish_off
       set_digital_price
       set_physical_price
       set_lead_time
@@ -75,6 +76,8 @@ module Admin
       when "quote_off" then {custom_quote_enabled: false}
       when "featured_on" then {featured: true}
       when "featured_off" then {featured: false}
+      when "publish_on" then {storefront_published: true}
+      when "publish_off" then {storefront_published: false}
       when "set_digital_price" then {digital_price_cents: money_to_cents(@value)}
       when "set_physical_price" then {physical_from_price_cents: money_to_cents(@value)}
       when "set_lead_time" then {lead_time_days: integer_value(@value)}

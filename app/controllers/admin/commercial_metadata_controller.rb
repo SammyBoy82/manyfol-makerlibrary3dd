@@ -28,6 +28,8 @@ module Admin
           metadata_scope.where(custom_quote_enabled: true)
         when "featured"
           metadata_scope.where(featured: true)
+        when "published"
+          metadata_scope.where(storefront_published: true)
         else
           metadata_scope
         end
@@ -50,6 +52,7 @@ module Admin
         physical: ModelCommercialMetadata.physical_sale.count,
         quote: ModelCommercialMetadata.custom_quote.count,
         featured: ModelCommercialMetadata.featured.count,
+        published: ModelCommercialMetadata.where(storefront_published: true).count,
         sku_missing: Model.where.not(id: ModelCommercialMetadata.where.not(sku: [nil, ""]).select(:model_id)).count,
         shown_storefront_ready: shown_readiness.count { |result| result.storefront.ready },
         shown_attention: shown_readiness.count { |result| result.score < 100 }
@@ -124,6 +127,7 @@ module Admin
         :digital_price,
         :physical_from_price,
         :featured,
+        :storefront_published,
         :lead_time_days,
         :commercial_notes
       )

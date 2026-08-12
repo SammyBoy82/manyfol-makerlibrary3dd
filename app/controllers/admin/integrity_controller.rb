@@ -41,6 +41,32 @@ module Admin
       redirect_to admin_integrity_nesting_path, alert: error.message
     end
 
+    def merge_nesting
+      skip_authorization
+
+      parent_id = params[:parent_id]
+      child_id = params[:child_id]
+      confirmation = params[:confirmation].to_s
+      expected = "MERGE-#{child_id}-INTO-#{parent_id}"
+
+      unless ActiveSupport::SecurityUtils.secure_compare(confirmation, expected)
+        redirect_to admin_integrity_nesting_merge_preview_path(parent_id: parent_id, child_id: child_id),
+          alert: "Merge confirmation did not match. Nothing was changed."
+        return
+      end
+
+      result = Admin::NestingMerger.call(parent_id: parent_id, child_id: child_id)
+
+      redirect_to admin_integrity_nesting_path,
+        notice: "Merged child Model ##{result.child_id} #{result.child_name.inspect} into parent Model ##{result.parent_id}. #{result.files_before} child file record(s) were processed; parent now has #{result.parent_files_after} file record(s)."
+    rescue ArgumentError => error
+      redirect_to admin_integrity_nesting_merge_preview_path(parent_id: parent_id, child_id: child_id), alert: error.message
+    rescue => error
+      Rails.logger.error("Nesting merge failed parent=#{parent_id} child=#{child_id}: #{error.class}: #{error.message}")
+      redirect_to admin_integrity_nesting_merge_preview_path(parent_id: parent_id, child_id: child_id),
+        alert: "Merge failed: #{error.class}: #{error.message}. Review the parent and child before retrying."
+    end
+
     def clear_stale
       skip_authorization
 

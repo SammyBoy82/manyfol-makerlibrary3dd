@@ -1,0 +1,133 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1 class="h3 mb-1">Edit Commercial Metadata</h1>
+      <div class="text-muted"><strong><%= @model.name %></strong> · Model #<%= @model.id %> · <%= @model.library&.name %></div>
+      <div class="small mt-1"><code><%= @model.path %></code></div>
+    </div>
+    <%= link_to "Back to Commercial Metadata", admin_commercial_metadata_path, class: "btn btn-outline-primary" %>
+  </div>
+
+  <% if @metadata.errors.any? %>
+    <div class="alert alert-danger">
+      <strong>Could not save:</strong>
+      <ul class="mb-0 mt-2">
+        <% @metadata.errors.full_messages.each do |message| %><li><%= message %></li><% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <%= form_with model: @metadata,
+        url: admin_commercial_metadata_update_path(model_id: @model.id),
+        method: :patch,
+        local: true do |f| %>
+
+    <div class="card mb-4">
+      <div class="card-header"><strong>Product Identity</strong></div>
+      <div class="card-body row g-3">
+        <div class="col-md-6">
+          <%= f.label :sku, "SKU", class: "form-label" %>
+          <%= f.text_field :sku, class: "form-control", placeholder: "e.g. ML3D-BN-000123" %>
+          <div class="form-text">Optional but must be unique when set.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Currency</label>
+          <input class="form-control" value="AUD" disabled>
+        </div>
+        <div class="col-md-3">
+          <%= f.label :lead_time_days, "Physical lead time (days)", class: "form-label" %>
+          <%= f.number_field :lead_time_days, min: 0, max: 365, class: "form-control" %>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><strong>Availability Channels</strong></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <div class="form-check form-switch">
+              <%= f.check_box :member_download_enabled, class: "form-check-input" %>
+              <%= f.label :member_download_enabled, "Member download", class: "form-check-label" %>
+            </div>
+            <div class="form-text">Eligible for member-library download access.</div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-check form-switch">
+              <%= f.check_box :digital_sale_enabled, class: "form-check-input" %>
+              <%= f.label :digital_sale_enabled, "Digital file sale", class: "form-check-label" %>
+            </div>
+            <div class="form-text">Expose as a separately purchasable digital product later.</div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-check form-switch">
+              <%= f.check_box :physical_sale_enabled, class: "form-check-input" %>
+              <%= f.label :physical_sale_enabled, "Physical print sale", class: "form-check-label" %>
+            </div>
+            <div class="form-text">Eligible for printed-product sale.</div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-check form-switch">
+              <%= f.check_box :custom_quote_enabled, class: "form-check-input" %>
+              <%= f.label :custom_quote_enabled, "Custom quote", class: "form-check-label" %>
+            </div>
+            <div class="form-text">Allow size/material/customisation quote requests.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><strong>Pricing</strong></div>
+      <div class="card-body row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="model_commercial_metadata_digital_price">Digital price (AUD)</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            <%= text_field_tag "model_commercial_metadata[digital_price]",
+                  @metadata.digital_price_cents.present? ? format("%.2f", @metadata.digital_price) : "",
+                  class: "form-control",
+                  inputmode: "decimal",
+                  placeholder: "0.00" %>
+          </div>
+          <div class="form-text">Required only when Digital file sale is enabled.</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label" for="model_commercial_metadata_physical_from_price">Physical price from (AUD)</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            <%= text_field_tag "model_commercial_metadata[physical_from_price]",
+                  @metadata.physical_from_price_cents.present? ? format("%.2f", @metadata.physical_from_price) : "",
+                  class: "form-control",
+                  inputmode: "decimal",
+                  placeholder: "0.00" %>
+          </div>
+          <div class="form-text">Required only when Physical print sale is enabled.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><strong>Merchandising</strong></div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-3">
+          <%= f.check_box :featured, class: "form-check-input" %>
+          <%= f.label :featured, "Featured model", class: "form-check-label" %>
+        </div>
+
+        <%= f.label :commercial_notes, "Internal commercial notes", class: "form-label" %>
+        <%= f.text_area :commercial_notes,
+              rows: 5,
+              class: "form-control",
+              placeholder: "Internal pricing, printability, material, packaging, licensing or merchandising notes…" %>
+        <div class="form-text">Admin-only. Not intended for public storefront display.</div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <%= f.submit "Save Commercial Metadata", class: "btn btn-primary" %>
+      <%= link_to "Cancel", admin_commercial_metadata_path, class: "btn btn-outline-secondary" %>
+    </div>
+  <% end %>
+</div>

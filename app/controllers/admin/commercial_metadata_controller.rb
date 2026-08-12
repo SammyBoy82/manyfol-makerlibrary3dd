@@ -44,7 +44,8 @@ module Admin
         digital: ModelCommercialMetadata.digital_sale.count,
         physical: ModelCommercialMetadata.physical_sale.count,
         quote: ModelCommercialMetadata.custom_quote.count,
-        featured: ModelCommercialMetadata.featured.count
+        featured: ModelCommercialMetadata.featured.count,
+        sku_missing: Model.where.not(id: ModelCommercialMetadata.where.not(sku: [nil, ""]).select(:model_id)).count
       }
     end
 
@@ -75,6 +76,35 @@ module Admin
       end
     end
 
+    def bulk_update
+      skip_authorization
+
+      result = Admin::CommercialBulkUpdater.call(
+        model_ids: params[:model_ids],
+        action: params[:bulk_action],
+        value: params[:bulk_value]
+      )
+
+      message = "Bulk update requested #{result.requested}; updated #{result.updated}; skipped #{result.skipped}."
+      message += " #{result.errors.size} error(s) were left unchanged." if result.errors.any?
+
+      redirect_to admin_commercial_metadata_path(filter_params), notice: message
+    rescue ArgumentError => error
+      redirect_to admin_commercial_metadata_path(filter_params), alert: error.message
+    end
+
+    def generate_skus
+      skip_authorization
+
+      ids = params[:model_ids].presence
+      result = Admin::CommercialSkuGenerator.call(model_ids: ids)
+
+      message = "SKU generation checked #{result.requested} model(s); created #{result.created}; already had SKU #{result.existing}."
+      message += " #{result.errors.size} error(s) were skipped." if result.errors.any?
+
+      redirect_to admin_commercial_metadata_path(filter_params), notice: message
+    end
+
     private
 
     def metadata_params
@@ -90,6 +120,14 @@ module Admin
         :lead_time_days,
         :commercial_notes
       )
+    end
+
+    def filter_params
+      {
+        q: params[:q].presence,
+        library_id: params[:library_id].presence,
+        channel: params[:channel].presence
+      }.compact
     end
 
     def money_to_cents(value)

@@ -36,8 +36,8 @@ module Admin
 
       @models = scope.limit(250)
       @metadata_by_model = ModelCommercialMetadata.where(model_id: @models.map(&:id)).index_by(&:model_id)
-      @readiness_by_model = @models.index_with do |model|
-        Admin::CommercialReadiness.call(model: model, metadata: @metadata_by_model[model.id])
+      @readiness_by_model = @models.each_with_object({}) do |model, result|
+        result[model.id] = Admin::CommercialReadiness.call(model: model, metadata: @metadata_by_model[model.id])
       end
       @libraries = Library.order(:name)
 

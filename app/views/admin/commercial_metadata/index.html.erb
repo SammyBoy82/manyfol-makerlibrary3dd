@@ -2,20 +2,20 @@
   <div class="d-flex justify-content-between align-items-start mb-4">
     <div>
       <h1 class="h3 mb-1">Commercial Metadata</h1>
-      <p class="text-muted mb-0">MakerLibrary3D sales, membership and storefront readiness layered on top of the Manyfold catalogue.</p>
+      <p class="text-muted mb-0">MakerLibrary3D sales, membership, storefront readiness and publication control layered on top of the Manyfold catalogue.</p>
     </div>
     <%= link_to "Back to Settings", settings_path, class: "btn btn-outline-secondary" %>
   </div>
 
   <div class="alert alert-info">
-    <strong>Phase 5.3 commercial readiness.</strong>
-    Readiness is calculated from the current catalogue and commercial settings. It does not publish anything yet. A channel marked <strong>Ready</strong> has the minimum metadata and files required for that future channel.
+    <strong>Phase 5.4 publication gate + catalogue API.</strong>
+    <strong>Storefront Ready</strong> means the model passes technical/commercial checks. <strong>Published</strong> is the separate administrator approval gate. The catalogue API exports only models that are both Published and Storefront Ready.
   </div>
 
   <div class="row g-3 mb-4">
     <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Catalogue Models</div><div class="display-6"><%= @stats[:models] %></div></div></div></div>
     <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Configured</div><div class="display-6"><%= @stats[:configured] %></div></div></div></div>
-    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Digital Sale</div><div class="display-6"><%= @stats[:digital] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Published</div><div class="display-6"><%= @stats[:published] %></div></div></div></div>
     <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Physical Sale</div><div class="display-6"><%= @stats[:physical] %></div></div></div></div>
     <div class="col-md-2"><div class="card h-100 border-success"><div class="card-body"><div class="text-muted small">Storefront Ready</div><div class="display-6"><%= @stats[:shown_storefront_ready] %></div><div class="small text-muted">shown rows</div></div></div></div>
     <div class="col-md-2"><div class="card h-100 border-warning"><div class="card-body"><div class="text-muted small">Needs Attention</div><div class="display-6"><%= @stats[:shown_attention] %></div><div class="small text-muted">shown rows</div></div></div></div>
@@ -39,7 +39,8 @@
               ["Digital sale", "digital"],
               ["Physical sale", "physical"],
               ["Custom quote", "quote"],
-              ["Featured", "featured"]
+              ["Featured", "featured"],
+              ["Published", "published"]
             ], @channel),
             class: "form-select" %>
     </div>
@@ -73,6 +74,8 @@
                     ["Custom quote — OFF", "quote_off"],
                     ["Featured — ON", "featured_on"],
                     ["Featured — OFF", "featured_off"],
+                    ["Storefront Published — ON", "publish_on"],
+                    ["Storefront Published — OFF", "publish_off"],
                     ["Set production lead time (days)", "set_lead_time"]
                   ]),
                   class: "form-select" %>
@@ -90,7 +93,7 @@
                   class: "btn btn-outline-success" %>
           </div>
         </div>
-        <div class="small text-muted mt-2">SKU format: <code>ML3D-L###-M######</code>. Existing SKUs are never replaced.</div>
+        <div class="small text-muted mt-2">Publishing does not bypass readiness. A published but blocked model is still excluded from the API.</div>
       </div>
     </div>
 
@@ -104,6 +107,7 @@
               <th>Library</th>
               <th>SKU</th>
               <th>Readiness</th>
+              <th>Published</th>
               <th>Member</th>
               <th>Digital</th>
               <th>Physical</th>
@@ -146,32 +150,31 @@
                   <% end %>
                 </td>
                 <td>
+                  <% if meta&.storefront_published? %>
+                    <span class="badge <%= ready.storefront.ready ? 'bg-primary' : 'bg-warning text-dark' %>"><%= ready.storefront.ready ? 'Published' : 'Published / blocked' %></span>
+                  <% else %>
+                    <span class="badge bg-secondary">Draft</span>
+                  <% end %>
+                </td>
+                <td>
                   <% if ready.member.enabled %>
                     <span class="badge <%= ready.member.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.member.ready ? 'Ready' : 'Blocked' %></span>
-                  <% else %>
-                    <span class="badge bg-secondary">Off</span>
-                  <% end %>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
                 </td>
                 <td>
                   <% if ready.digital.enabled %>
                     <span class="badge <%= ready.digital.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.digital.ready ? 'Ready' : 'Blocked' %></span>
-                  <% else %>
-                    <span class="badge bg-secondary">Off</span>
-                  <% end %>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
                 </td>
                 <td>
                   <% if ready.physical.enabled %>
                     <span class="badge <%= ready.physical.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.physical.ready ? 'Ready' : 'Blocked' %></span>
-                  <% else %>
-                    <span class="badge bg-secondary">Off</span>
-                  <% end %>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
                 </td>
                 <td>
                   <% if ready.quote.enabled %>
                     <span class="badge <%= ready.quote.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.quote.ready ? 'Ready' : 'Blocked' %></span>
-                  <% else %>
-                    <span class="badge bg-secondary">Off</span>
-                  <% end %>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
                 </td>
                 <td>
                   <% if meta&.digital_sale_enabled? %><div>Digital: <%= number_to_currency(meta.digital_price, unit: "$", precision: 2) %></div><% end %>
@@ -194,7 +197,8 @@
           params: {q: @query, library_id: @library_id, channel: @channel},
           class: "btn btn-outline-success",
           data: {turbo_confirm: "Generate deterministic SKUs for every catalogue model that does not already have one? Existing SKUs will not change."} %>
-    <span class="small text-muted">Readiness uses registered catalogue files and metadata; it does not perform a full storage scan on page load.</span>
+    <code>/api/makerlibrary3d/v1/catalog</code>
+    <span class="small text-muted">API returns only Published + Storefront Ready models. Internal commercial notes are excluded.</span>
   </div>
 
   <% if @models.empty? %><div class="alert alert-light border mt-3">No catalogue models match the current filter.</div><% end %>

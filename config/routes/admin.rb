@@ -118,6 +118,14 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/commercial_metadata#index",
     as: :admin_commercial_metadata
 
+  post "/admin/commercial-metadata/bulk-update",
+    to: "admin/commercial_metadata#bulk_update",
+    as: :admin_commercial_metadata_bulk_update
+
+  post "/admin/commercial-metadata/generate-skus",
+    to: "admin/commercial_metadata#generate_skus",
+    as: :admin_commercial_metadata_generate_skus
+
   get "/admin/commercial-metadata/:model_id/edit",
     to: "admin/commercial_metadata#edit",
     as: :edit_admin_commercial_metadata

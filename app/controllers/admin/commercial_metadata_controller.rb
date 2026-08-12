@@ -11,7 +11,7 @@ module Admin
       @library_id = params[:library_id].presence
       @channel = params[:channel].presence
 
-      scope = Model.includes(:library).order(:name)
+      scope = Model.includes(:library, :model_files).order(:name)
       scope = scope.where(library_id: @library_id) if @library_id
       scope = scope.where("models.name ILIKE ?", "%#{Model.sanitize_sql_like(@query)}%") if @query.present?
 
@@ -36,7 +36,12 @@ module Admin
 
       @models = scope.limit(250)
       @metadata_by_model = ModelCommercialMetadata.where(model_id: @models.map(&:id)).index_by(&:model_id)
+      @readiness_by_model = @models.index_with do |model|
+        Admin::CommercialReadiness.call(model: model, metadata: @metadata_by_model[model.id])
+      end
       @libraries = Library.order(:name)
+
+      shown_readiness = @readiness_by_model.values
 
       @stats = {
         models: Model.count,
@@ -45,7 +50,9 @@ module Admin
         physical: ModelCommercialMetadata.physical_sale.count,
         quote: ModelCommercialMetadata.custom_quote.count,
         featured: ModelCommercialMetadata.featured.count,
-        sku_missing: Model.where.not(id: ModelCommercialMetadata.where.not(sku: [nil, ""]).select(:model_id)).count
+        sku_missing: Model.where.not(id: ModelCommercialMetadata.where.not(sku: [nil, ""]).select(:model_id)).count,
+        shown_storefront_ready: shown_readiness.count { |result| result.storefront.ready },
+        shown_attention: shown_readiness.count { |result| result.score < 100 }
       }
     end
 

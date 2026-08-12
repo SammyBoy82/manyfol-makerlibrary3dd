@@ -1,0 +1,117 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1 class="h3 mb-1">File & Storage Intelligence</h1>
+      <p class="text-muted mb-0">Read-only inventory of registered MakerLibrary3D files and their current storage state.</p>
+    </div>
+    <%= link_to "Back to Settings", settings_path, class: "btn btn-outline-secondary" %>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Phase 6.1 read-only inventory.</strong>
+    This page does not move, rename, delete, reattach, hash, or repair files. It only reports data already registered in Manyfold plus a source-exists check for the displayed rows.
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Catalogue Files</div><div class="display-6"><%= @catalogue_file_count %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Shown</div><div class="display-6"><%= @summary[:shown] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100 border-success"><div class="card-body"><div class="text-muted small">Source Present</div><div class="display-6"><%= @summary[:source_present] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100 border-danger"><div class="card-body"><div class="text-muted small">Source Missing</div><div class="display-6"><%= @summary[:source_missing] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">With Digest</div><div class="display-6"><%= @summary[:with_digest] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Shown Size</div><div class="display-6 fs-4"><%= number_to_human_size(@summary[:bytes]) %></div></div></div></div>
+  </div>
+
+  <%= form_with url: admin_file_storage_path, method: :get, local: true, class: "row g-2 mb-4" do %>
+    <div class="col-lg-4">
+      <%= text_field_tag :q, @query, class: "form-control", placeholder: "Search model, folder or filename" %>
+    </div>
+    <div class="col-lg-3">
+      <%= select_tag :library_id,
+            options_from_collection_for_select(@libraries, :id, :name, @library_id),
+            include_blank: "All libraries",
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-2">
+      <%= select_tag :extension,
+            options_for_select(@extensions.map { |ext| [ext.upcase, ext] }, @extension),
+            include_blank: "All extensions",
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-2">
+      <%= select_tag :source_state,
+            options_for_select([["All source states", ""], ["Present", "present"], ["Missing", "missing"]], @source_state),
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-1 d-grid">
+      <%= submit_tag "Filter", class: "btn btn-primary" %>
+    </div>
+  <% end %>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Model</th>
+            <th>Library</th>
+            <th>Storage</th>
+            <th>Relative path</th>
+            <th>Size</th>
+            <th>Modified</th>
+            <th>Source</th>
+            <th>Digest</th>
+            <th>Render</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @rows.each do |row| %>
+            <tr>
+              <td>
+                <strong><%= row.filename %></strong>
+                <div class="small text-muted">#<%= row.model_file.id %> · <%= row.extension.upcase.presence || "NO EXT" %></div>
+              </td>
+              <td>
+                <%= link_to row.model.name, model_path(row.model), target: "_blank", rel: "noopener" %>
+                <div class="small text-muted">Model #<%= row.model.id %></div>
+              </td>
+              <td><%= row.library.name %></td>
+              <td>
+                <code><%= row.storage_key %></code>
+                <div class="small text-muted"><%= row.library.storage_service %></div>
+                <% if row.physical_path.present? %>
+                  <details class="small mt-1">
+                    <summary>Physical path</summary>
+                    <code class="text-break"><%= row.physical_path %></code>
+                  </details>
+                <% end %>
+              </td>
+              <td><code class="text-break"><%= row.relative_path %></code></td>
+              <td><%= number_to_human_size(row.size.to_i) %></td>
+              <td><%= row.modified_at&.strftime("%Y-%m-%d %H:%M") || "—" %></td>
+              <td>
+                <span class="badge <%= row.source_exists ? 'bg-success' : 'bg-danger' %>"><%= row.source_exists ? 'Present' : 'Missing' %></span>
+              </td>
+              <td>
+                <% if row.digest.present? %>
+                  <code title="<%= row.digest %>"><%= row.digest.first(12) %>…</code>
+                <% else %>
+                  <span class="text-muted">—</span>
+                <% end %>
+              </td>
+              <td>
+                <span class="badge <%= row.has_render ? 'bg-success' : 'bg-secondary' %>"><%= row.has_render ? 'Cached' : 'No' %></span>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <% if @rows.empty? %>
+    <div class="alert alert-light border mt-3">No registered model files match the current filters.</div>
+  <% elsif @rows.size >= 250 %>
+    <div class="alert alert-light border mt-3 mb-0">Showing the first 250 matching registered files. Narrow the filters to inspect a smaller set.</div>
+  <% end %>
+</div>

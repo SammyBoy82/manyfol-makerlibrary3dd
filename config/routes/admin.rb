@@ -114,6 +114,18 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#remove_missing_records",
     as: :admin_integrity_remove_missing_records
 
+  get "/admin/commercial-metadata",
+    to: "admin/commercial_metadata#index",
+    as: :admin_commercial_metadata
+
+  get "/admin/commercial-metadata/:model_id/edit",
+    to: "admin/commercial_metadata#edit",
+    as: :edit_admin_commercial_metadata
+
+  patch "/admin/commercial-metadata/:model_id",
+    to: "admin/commercial_metadata#update",
+    as: :admin_commercial_metadata_update
+
   get "/admin/media-maintenance",
     to: "admin/media_maintenance#index",
     as: :admin_media_maintenance

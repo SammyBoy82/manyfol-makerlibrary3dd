@@ -92,6 +92,10 @@ authenticate :user, lambda { |u| u.is_administrator? } do
     to: "admin/integrity#nesting_merge_preview",
     as: :admin_integrity_nesting_merge_preview
 
+  post "/admin/integrity/nesting/merge",
+    to: "admin/integrity#merge_nesting",
+    as: :admin_integrity_merge_nesting
+
   get "/admin/integrity/preview/:category",
     to: "admin/integrity#preview",
     as: :admin_integrity_preview,

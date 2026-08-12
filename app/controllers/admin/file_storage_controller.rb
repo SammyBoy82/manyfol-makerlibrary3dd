@@ -16,7 +16,7 @@ module Admin
       scope = scope.where(models: {library_id: @library_id}) if @library_id
 
       if @query.present?
-        like = "%#{ActiveRecord::Base.sanitize_sql_like(@query)}%"
+        like = "%#{ModelFile.sanitize_sql_like(@query)}%"
         scope = scope.where("models.name ILIKE :q OR model_files.filename ILIKE :q OR models.path ILIKE :q", q: like)
       end
 
@@ -28,12 +28,14 @@ module Admin
       rows = rows.reject(&:source_exists) if @source_state == "missing"
 
       @rows = rows
-      @summary = result.summary.merge(
+      @summary = {
         shown: rows.size,
         source_present: rows.count(&:source_exists),
         source_missing: rows.count { |row| !row.source_exists },
+        with_digest: rows.count { |row| row.digest.present? },
+        with_render: rows.count(&:has_render),
         bytes: rows.sum { |row| row.size.to_i }
-      )
+      }
       @libraries = Library.order(:name)
       @extensions = ModelFile.where.not(filename: nil).pluck(:filename).filter_map do |filename|
         File.extname(filename).delete(".").downcase.presence

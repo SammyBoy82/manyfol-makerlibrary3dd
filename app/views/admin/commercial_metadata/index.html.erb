@@ -1,0 +1,94 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1 class="h3 mb-1">Commercial Metadata</h1>
+      <p class="text-muted mb-0">MakerLibrary3D sales and membership metadata layered on top of the Manyfold catalogue.</p>
+    </div>
+    <%= link_to "Back to Settings", settings_path, class: "btn btn-outline-secondary" %>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Phase 5.1 foundation.</strong>
+    These settings do not publish products or charge customers yet. They define which catalogue models are eligible for member download, digital sale, physical print sale, custom quote, and future featured placement.
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Catalogue Models</div><div class="display-6"><%= @stats[:models] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Configured</div><div class="display-6"><%= @stats[:configured] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Digital Sale</div><div class="display-6"><%= @stats[:digital] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Physical Sale</div><div class="display-6"><%= @stats[:physical] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Custom Quote</div><div class="display-6"><%= @stats[:quote] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Featured</div><div class="display-6"><%= @stats[:featured] %></div></div></div></div>
+  </div>
+
+  <%= form_with url: admin_commercial_metadata_path, method: :get, local: true, class: "row g-2 mb-4" do %>
+    <div class="col-lg-5">
+      <%= text_field_tag :q, @query, class: "form-control", placeholder: "Search model name" %>
+    </div>
+    <div class="col-lg-3">
+      <%= select_tag :library_id,
+            options_from_collection_for_select(@libraries, :id, :name, @library_id),
+            include_blank: "All libraries",
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-2">
+      <%= select_tag :channel,
+            options_for_select([
+              ["All channels", ""],
+              ["Member download", "member"],
+              ["Digital sale", "digital"],
+              ["Physical sale", "physical"],
+              ["Custom quote", "quote"],
+              ["Featured", "featured"]
+            ], @channel),
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-2 d-grid">
+      <%= submit_tag "Filter", class: "btn btn-primary" %>
+    </div>
+  <% end %>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Library</th>
+            <th>SKU</th>
+            <th>Member</th>
+            <th>Digital</th>
+            <th>Physical</th>
+            <th>Quote</th>
+            <th>Featured</th>
+            <th>Price</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @models.each do |model| %>
+            <% meta = @metadata_by_model[model.id] %>
+            <tr>
+              <td><strong><%= model.name %></strong><div class="small text-muted">Model #<%= model.id %></div></td>
+              <td><%= model.library&.name %></td>
+              <td><code><%= meta&.sku || "—" %></code></td>
+              <td><span class="badge <%= (meta.nil? || meta.member_download_enabled?) ? 'bg-success' : 'bg-secondary' %>"><%= (meta.nil? || meta.member_download_enabled?) ? 'Yes' : 'No' %></span></td>
+              <td><span class="badge <%= meta&.digital_sale_enabled? ? 'bg-success' : 'bg-secondary' %>"><%= meta&.digital_sale_enabled? ? 'Yes' : 'No' %></span></td>
+              <td><span class="badge <%= meta&.physical_sale_enabled? ? 'bg-success' : 'bg-secondary' %>"><%= meta&.physical_sale_enabled? ? 'Yes' : 'No' %></span></td>
+              <td><span class="badge <%= meta&.custom_quote_enabled? ? 'bg-success' : 'bg-secondary' %>"><%= meta&.custom_quote_enabled? ? 'Yes' : 'No' %></span></td>
+              <td><span class="badge <%= meta&.featured? ? 'bg-warning text-dark' : 'bg-secondary' %>"><%= meta&.featured? ? 'Yes' : 'No' %></span></td>
+              <td>
+                <% if meta&.digital_sale_enabled? %><div>Digital: <%= number_to_currency(meta.digital_price, unit: "$", precision: 2) %></div><% end %>
+                <% if meta&.physical_sale_enabled? %><div>Physical from: <%= number_to_currency(meta.physical_from_price, unit: "$", precision: 2) %></div><% end %>
+                <% unless meta&.digital_sale_enabled? || meta&.physical_sale_enabled? %><span class="text-muted">—</span><% end %>
+              </td>
+              <td><%= link_to "Edit", edit_admin_commercial_metadata_path(model_id: model.id), class: "btn btn-sm btn-outline-primary" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <% if @models.empty? %><div class="alert alert-light border mt-3">No catalogue models match the current filter.</div><% end %>
+</div>

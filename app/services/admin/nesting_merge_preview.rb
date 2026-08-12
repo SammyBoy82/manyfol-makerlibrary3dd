@@ -8,6 +8,7 @@ module Admin
       :files,
       :metadata,
       :warnings,
+      :blockers,
       keyword_init: true
     )
 
@@ -31,15 +32,17 @@ module Admin
       raise ArgumentError, "Selected child is not physically inside the selected parent path." unless parent.contains?(child)
 
       relative_path = Pathname.new(child.path).relative_path_from(Pathname.new(parent.path)).to_s
+      files = file_impacts(parent, child, relative_path)
 
       Result.new(
         generated_at: Time.current,
         parent: model_summary(parent),
         child: model_summary(child),
         relative_path: relative_path,
-        files: file_impacts(parent, child, relative_path),
+        files: files,
         metadata: metadata_impacts(parent, child),
-        warnings: warnings(parent, child)
+        warnings: warnings(parent, child),
+        blockers: blockers(parent, child, files)
       )
     end
 
@@ -128,13 +131,42 @@ module Admin
 
     def warnings(parent, child)
       result = []
-      result << "Child model database record will be destroyed after its files and metadata are merged." 
+      result << "Child model database record will be destroyed after its files and metadata are merged."
       result << "Parent name and path remain unchanged."
       result << "Child preview/entrypoint selection is not automatically promoted if the parent already has its own selection."
-      result << "A fresh backup is strongly recommended immediately before enabling Apply."
+      result << "A fresh database backup is recommended immediately before Apply."
       result << "Child has no model files." if child.model_files.empty?
-      result << "Parent already contains other nested catalogue models." if parent.library.models.where.not(id: [parent.id, child.id]).any? { |candidate| parent.contains?(candidate) }
+      result << "Parent already contains other nested catalogue models; they will remain separate and can be reviewed one at a time." if sibling_nested_models(parent, child).any?
       result
+    end
+
+    def blockers(parent, child, files)
+      result = []
+
+      unavailable = files.select { |file| file[:storage_exists] != true }
+      if unavailable.any?
+        result << "#{unavailable.size} child file(s) are missing or unavailable on storage. Merge is blocked until every child file is present."
+      end
+
+      descendants = child.library.models.where.not(id: [parent.id, child.id]).select { |candidate| child.contains?(candidate) }
+      if descendants.any?
+        result << "Child model contains #{descendants.size} nested catalogue model(s). Merge the deepest children first."
+      end
+
+      deduplicated_ids = files.select { |file| file[:action] == :deduplicate_database_record }.map { |file| file[:id] }
+      if deduplicated_ids.any?
+        preview_refs = Model.where(preview_file_id: deduplicated_ids).count
+        entrypoint_refs = Model.where(entrypoint_id: deduplicated_ids).count
+        if preview_refs.positive? || entrypoint_refs.positive?
+          result << "A child file that would be deduplicated is still referenced as preview/entrypoint. Resolve that reference before merge."
+        end
+      end
+
+      result
+    end
+
+    def sibling_nested_models(parent, child)
+      parent.library.models.where.not(id: [parent.id, child.id]).select { |candidate| parent.contains?(candidate) }
     end
 
     def storage_exists?(file)

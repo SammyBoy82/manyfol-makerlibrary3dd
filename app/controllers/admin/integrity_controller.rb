@@ -67,6 +67,17 @@ module Admin
         alert: "Merge failed: #{error.class}: #{error.message}. Review the parent and child before retrying."
     end
 
+    def ignore_nesting
+      skip_authorization
+
+      result = Admin::NestingProblemIgnorer.call(problem_id: params[:problem_id])
+
+      redirect_to admin_integrity_nesting_path,
+        notice: "Kept Model ##{result.model_id} #{result.model_name.inspect} separate and ignored nesting problem ##{result.problem_id}. No files or model records were changed."
+    rescue ArgumentError => error
+      redirect_to admin_integrity_nesting_path, alert: error.message
+    end
+
     def clear_stale
       skip_authorization
 

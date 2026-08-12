@@ -17,7 +17,7 @@
     <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Shown</div><div class="display-6"><%= @summary[:shown] %></div></div></div></div>
     <div class="col-md-2"><div class="card h-100 border-success"><div class="card-body"><div class="text-muted small">Source Present</div><div class="display-6"><%= @summary[:source_present] %></div></div></div></div>
     <div class="col-md-2"><div class="card h-100 border-danger"><div class="card-body"><div class="text-muted small">Source Missing</div><div class="display-6"><%= @summary[:source_missing] %></div></div></div></div>
-    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">With Digest</div><div class="display-6"><%= @summary[:with_digest] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Cached Render</div><div class="display-6"><%= @summary[:with_render] %></div></div></div></div>
     <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Shown Size</div><div class="display-6 fs-4"><%= number_to_human_size(@summary[:bytes]) %></div></div></div></div>
   </div>
 
@@ -53,6 +53,7 @@
         <thead>
           <tr>
             <th>File</th>
+            <th>Folder</th>
             <th>Model</th>
             <th>Library</th>
             <th>Storage</th>
@@ -60,7 +61,6 @@
             <th>Size</th>
             <th>Modified</th>
             <th>Source</th>
-            <th>Digest</th>
             <th>Render</th>
           </tr>
         </thead>
@@ -71,6 +71,7 @@
                 <strong><%= row.filename %></strong>
                 <div class="small text-muted">#<%= row.model_file.id %> · <%= row.extension.upcase.presence || "NO EXT" %></div>
               </td>
+              <td><strong><%= row.folder_name %></strong></td>
               <td>
                 <%= link_to row.model.name, model_path(row.model), target: "_blank", rel: "noopener" %>
                 <div class="small text-muted">Model #<%= row.model.id %></div>
@@ -91,13 +92,6 @@
               <td><%= row.modified_at&.strftime("%Y-%m-%d %H:%M") || "—" %></td>
               <td>
                 <span class="badge <%= row.source_exists ? 'bg-success' : 'bg-danger' %>"><%= row.source_exists ? 'Present' : 'Missing' %></span>
-              </td>
-              <td>
-                <% if row.digest.present? %>
-                  <code title="<%= row.digest %>"><%= row.digest.first(12) %>…</code>
-                <% else %>
-                  <span class="text-muted">—</span>
-                <% end %>
               </td>
               <td>
                 <span class="badge <%= row.has_render ? 'bg-success' : 'bg-secondary' %>"><%= row.has_render ? 'Cached' : 'No' %></span>

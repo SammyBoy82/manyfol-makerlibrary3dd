@@ -2,16 +2,24 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h1 class="h3 mb-1">Nesting Merge Impact Preview</h1>
-      <p class="text-muted mb-0">Read-only preview of exactly what a parent/child model merge would change.</p>
+      <p class="text-muted mb-0">Review exactly what will change before merging one child catalogue model into its parent.</p>
       <div class="small text-muted mt-1">Generated <%= time_ago_in_words(@preview.generated_at) %> ago</div>
     </div>
     <%= link_to "Back to Nesting Review", admin_integrity_nesting_path, class: "btn btn-outline-primary" %>
   </div>
 
-  <div class="alert alert-warning">
-    <strong>Preview only — no merge is enabled.</strong>
-    This page models Manyfold's native merge behavior so you can review file moves, duplicate handling and metadata inheritance before any Apply action exists.
-  </div>
+  <% if @preview.blockers.any? %>
+    <div class="alert alert-danger">
+      <strong>MERGE BLOCKED.</strong> Nothing can be applied until all safety blockers are resolved.
+      <ul class="mb-0 mt-2">
+        <% @preview.blockers.each do |blocker| %><li><%= blocker %></li><% end %>
+      </ul>
+    </div>
+  <% else %>
+    <div class="alert alert-success">
+      <strong>Safety checks passed.</strong> All child files are currently present and the relationship is eligible for a one-child-at-a-time guarded merge. The server will repeat every safety check immediately before Apply.
+    </div>
+  <% end %>
 
   <div class="row g-3 mb-4">
     <div class="col-lg-6">
@@ -22,7 +30,7 @@
           <div class="small text-muted">Model #<%= @preview.parent[:id] %> · <%= @preview.parent[:library] %></div>
           <div class="mt-2"><code><%= @preview.parent[:path] %></code></div>
           <div class="mt-2"><%= @preview.parent[:files] %> files · <%= @preview.parent[:three_d] %> 3D · <%= @preview.parent[:images] %> images</div>
-          <div class="mt-2 small">Parent name and catalogue path remain unchanged.</div>
+          <div class="mt-2 small"><strong>This catalogue model remains.</strong> Its name and path do not change.</div>
         </div>
       </div>
     </div>
@@ -35,7 +43,7 @@
           <div class="small text-muted">Model #<%= @preview.child[:id] %> · <%= @preview.child[:library] %></div>
           <div class="mt-2"><code><%= @preview.child[:path] %></code></div>
           <div class="mt-2"><%= @preview.child[:files] %> files · <%= @preview.child[:three_d] %> 3D · <%= @preview.child[:images] %> images</div>
-          <div class="mt-2 small text-danger"><strong>The child catalogue record would be destroyed after a successful merge.</strong></div>
+          <div class="mt-2 small text-danger"><strong>This child catalogue record will be removed after a successful merge.</strong></div>
         </div>
       </div>
     </div>
@@ -75,10 +83,10 @@
                 <td>
                   <% if file[:action] == :deduplicate_database_record %>
                     <span class="badge bg-warning text-dark">Identical parent copy already exists</span>
-                    <div class="small mt-1">Child DB file record would be discarded; existing parent file kept.</div>
+                    <div class="small mt-1">Child DB file record will be discarded; existing parent file kept.</div>
                   <% else %>
                     <span class="badge bg-success">Adopt into parent</span>
-                    <% if file[:conflict] %><div class="small text-warning mt-1">Filename conflict: digest suffix would be added.</div><% end %>
+                    <% if file[:conflict] %><div class="small text-warning mt-1">Filename conflict: digest suffix will be added.</div><% end %>
                   <% end %>
                 </td>
               </tr>
@@ -122,14 +130,33 @@
     </div>
   </div>
 
-  <div class="card border-warning">
-    <div class="card-header"><strong>Safety / Consequences</strong></div>
+  <div class="card <%= @preview.blockers.any? ? 'border-danger' : 'border-warning' %>">
+    <div class="card-header"><strong>Apply / Safety</strong></div>
     <div class="card-body">
       <ul class="mb-3">
         <% @preview.warnings.each do |warning| %><li><%= warning %></li><% end %>
       </ul>
-      <button class="btn btn-danger" disabled>Merge Child Into Parent — disabled in Phase 4.8</button>
-      <span class="small text-muted ms-2">Phase 4.9 will add explicit Apply only after this preview is validated.</span>
+
+      <% if @preview.blockers.any? %>
+        <button class="btn btn-danger" disabled>Merge blocked</button>
+        <span class="small text-muted ms-2">Resolve the blockers above and reload this preview.</span>
+      <% else %>
+        <div class="alert alert-warning">
+          <strong>This is destructive to the child catalogue record.</strong>
+          Only the parent remains after a successful merge. Child files are adopted into the parent using Manyfold's native merge behavior.
+        </div>
+
+        <%= button_to "Merge Child ##{@preview.child[:id]} #{@preview.child[:name]} Into Parent ##{@preview.parent[:id]} #{@preview.parent[:name]}",
+              admin_integrity_merge_nesting_path,
+              method: :post,
+              params: {
+                parent_id: @preview.parent[:id],
+                child_id: @preview.child[:id],
+                confirmation: "MERGE-#{@preview.child[:id]}-INTO-#{@preview.parent[:id]}"
+              },
+              class: "btn btn-danger",
+              data: {turbo_confirm: "FINAL CONFIRMATION: Merge child Model ##{@preview.child[:id]} #{@preview.child[:name]} into parent Model ##{@preview.parent[:id]} #{@preview.parent[:name]}? The child catalogue record will be removed after its files and metadata are merged."} %>
+      <% end %>
     </div>
   </div>
 </div>

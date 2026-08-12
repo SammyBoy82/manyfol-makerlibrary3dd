@@ -109,11 +109,23 @@
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><strong>Merchandising</strong></div>
+      <div class="card-header"><strong>Merchandising & Publication</strong></div>
       <div class="card-body">
-        <div class="form-check form-switch mb-3">
-          <%= f.check_box :featured, class: "form-check-input" %>
-          <%= f.label :featured, "Featured model", class: "form-check-label" %>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="form-check form-switch">
+              <%= f.check_box :featured, class: "form-check-input" %>
+              <%= f.label :featured, "Featured model", class: "form-check-label" %>
+            </div>
+            <div class="form-text">Prioritise this model in future storefront merchandising.</div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-check form-switch">
+              <%= f.check_box :storefront_published, class: "form-check-input" %>
+              <%= f.label :storefront_published, "Storefront published", class: "form-check-label fw-semibold" %>
+            </div>
+            <div class="form-text">Explicit approval gate. The public catalogue API exports this model only when this is ON and storefront readiness also passes.</div>
+          </div>
         </div>
 
         <%= f.label :commercial_notes, "Internal commercial notes", class: "form-label" %>
@@ -121,7 +133,7 @@
               rows: 5,
               class: "form-control",
               placeholder: "Internal pricing, printability, material, packaging, licensing or merchandising notes…" %>
-        <div class="form-text">Admin-only. Not intended for public storefront display.</div>
+        <div class="form-text">Admin-only. Never included in the public commercial catalogue API.</div>
       </div>
     </div>
 

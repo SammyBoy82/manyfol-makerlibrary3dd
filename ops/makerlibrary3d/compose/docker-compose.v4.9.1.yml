@@ -1,0 +1,3 @@
+services:
+  manyfold:
+    image: slforge/manyfold-makerlibrary3d:0.147.1-storage-v4.9.1

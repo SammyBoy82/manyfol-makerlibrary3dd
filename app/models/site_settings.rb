@@ -156,7 +156,7 @@ class SiteSettings < RailsSettings::Base
     )
 
     PAGINATION = ActiveSupport::HashWithIndifferentAccess.new(
-      per_page: 12
+      per_page: 48
     )
 
     TAG_CLOUD = ActiveSupport::HashWithIndifferentAccess.new(

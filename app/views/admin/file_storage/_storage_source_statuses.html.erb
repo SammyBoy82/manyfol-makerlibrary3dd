@@ -1,0 +1,135 @@
+<% if statuses.present? %>
+
+  <div class="card border-0">
+
+    <div class="table-responsive">
+
+      <table class="table table-sm align-middle mb-0">
+
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Storage Source</th>
+            <th>Message</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          <% statuses.each do |status| %>
+
+            <tr>
+
+              <td>
+
+                <% badge =
+                  case status.state
+                  when "mounted", "test_passed"
+                    "bg-success"
+                  when "failed"
+                    "bg-danger"
+                  when "queued", "testing", "creating"
+                    "bg-warning text-dark"
+                  else
+                    "bg-secondary"
+                  end
+                %>
+
+                <span class="badge <%= badge %>">
+                  <%= status.state.to_s.humanize %>
+                </span>
+
+              </td>
+
+
+              <td>
+
+                <% if status.display_name.present? %>
+
+                  <strong>
+                    <%= status.display_name %>
+                  </strong>
+
+                <% elsif status.slug.present? %>
+
+                  <strong>
+                    <%= status.slug %>
+                  </strong>
+
+                <% else %>
+
+                  Request
+
+                <% end %>
+
+
+                <% if status.container_path.present? %>
+
+                  <div>
+                    <code>
+                      <%= status.container_path %>
+                    </code>
+                  </div>
+
+                <% end %>
+
+              </td>
+
+
+              <td>
+
+                <%= status.message %>
+                <% if status.state == "mounted" && status.slug.present? %>
+                  <div class="mt-2"><%= link_to "Manage Source / Register Library", manage_admin_storage_source_path(status.slug), class: "btn btn-sm btn-outline-primary" %></div>
+                <% end %>
+
+                <% if status.top_level_entries %>
+
+                  <div class="small text-muted">
+                    Connection test found
+                    <%= status.top_level_entries %>
+                    top-level item(s).
+                  </div>
+
+                <% end %>
+
+
+                <% if status.error.present? %>
+
+                  <details class="mt-1">
+
+                    <summary class="text-danger">
+                      Technical error
+                    </summary>
+
+                    <pre class="small text-danger mt-2"><%= status.error %></pre>
+
+                  </details>
+
+                <% end %>
+
+              </td>
+
+
+              <td class="text-nowrap">
+
+                <%= status.updated_at ?
+                      status.updated_at.strftime("%Y-%m-%d %H:%M:%S") :
+                      "—" %>
+
+              </td>
+
+            </tr>
+
+          <% end %>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+<% end %>

@@ -1,32 +1,273 @@
-<div class="row pt-3 mb-3 text-center">
-  <h1 class="d-none d-md-block"><%= site_name %></h1>
-  <p class='lead'><%= site_tagline %></p>
-  <% if SiteSettings.demo_mode_enabled? %>
-    <div class="alert alert-info">
-      <%= t "application.demo_mode" %>
+<div class="container-fluid py-4">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+
+    <div>
+      <div class="small text-muted mb-1">
+        MakerLibrary3D Member Library
+      </div>
+
+      <h1 class="mb-1">
+        Welcome, <%= current_user.username %>
+      </h1>
+
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+
+        <span class="badge bg-primary">
+          <%= @member_role %>
+        </span>
+
+        <span class="text-muted">
+          Browse and download models available to your account.
+        </span>
+
+      </div>
     </div>
-  <% end %>
-  <div id="home-search" class="col-8 offset-md-2 mt-3 mb-3" data-turbo-permanent>
-    <%= form_with url: models_path, method: :get do |f| %>
-      <div class="input-group">
-        <%= f.text_field :q, class: "form-control", placeholder: translate(".search.placeholder"), aria_label: translate(".search.submit"), aria_describedby: "button-search", value: @query, role: "search" %>
-        <%= f.submit translate(".search.submit"), class: "btn btn-primary", name: nil %>
-      </div>
-      <%= SearchHelp do %>
-        <small class="ms-3"><%= t(".open_search_help") %></small>
+
+
+    <div class="d-flex gap-2 flex-wrap">
+
+      <%= link_to "Browse Library",
+            models_path,
+            class: "btn btn-primary" %>
+
+      <%= link_to "My Account",
+            edit_user_registration_path,
+            class: "btn btn-outline-secondary" %>
+
+      <% if current_user.is_administrator? %>
+
+        <%= link_to "Admin Storage",
+              admin_file_storage_path,
+              class: "btn btn-outline-dark" %>
+
       <% end %>
-    <% end %>
+
+    </div>
+
   </div>
-</div>
-<div class="row row-cols-2">
-  <div class="col-8 offset-md-2">
-    <% if !@feed.empty? %>
-      <p class="lead"><%= t(".recent_activity") %></p>
-      <%= render partial: "activity", collection: @feed %>
-    <% else %>
-      <div class="alert alert-info">
-        <%= t(".no_activities") %>
+
+
+  <div class="row g-3 mb-4">
+
+    <div class="col-md-4">
+
+      <div class="card h-100">
+        <div class="card-body">
+
+          <div class="text-muted small">
+            Models Available
+          </div>
+
+          <div class="display-6 fw-semibold">
+            <%= number_with_delimiter(@model_count) %>
+          </div>
+
+          <div class="small text-muted">
+            Models currently visible to your account.
+          </div>
+
+        </div>
       </div>
-    <% end %>
+
+    </div>
+
+
+    <div class="col-md-4">
+
+      <div class="card h-100">
+        <div class="card-body">
+
+          <div class="text-muted small">
+            Libraries
+          </div>
+
+          <div class="display-6 fw-semibold">
+            <%= number_with_delimiter(@library_count) %>
+          </div>
+
+          <div class="small text-muted">
+            Active model libraries represented in your catalogue.
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="col-md-4">
+
+      <div class="card h-100">
+        <div class="card-body">
+
+          <div class="text-muted small">
+            Files Available
+          </div>
+
+          <div class="display-6 fw-semibold">
+            <%= number_with_delimiter(@file_count) %>
+          </div>
+
+          <div class="small text-muted">
+            Files attached to models available to your account.
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
   </div>
+
+
+  <div class="card mb-4">
+
+    <div class="card-header">
+      <strong>Search MakerLibrary3D</strong>
+    </div>
+
+    <div class="card-body">
+
+      <%= form_with url: models_path,
+            method: :get do |f| %>
+
+        <div class="input-group input-group-lg">
+
+          <%= f.text_field :q,
+                class: "form-control",
+                placeholder:
+                  "Search models, collections, creators or keywords…",
+                role: "search" %>
+
+          <%= f.submit "Search",
+                class: "btn btn-primary",
+                name: nil %>
+
+        </div>
+
+      <% end %>
+
+    </div>
+
+  </div>
+
+
+  <div class="card">
+
+    <div class="card-header d-flex justify-content-between align-items-center">
+
+      <div>
+        <strong>Recently Added</strong>
+
+        <div class="small text-muted">
+          New models recently added to MakerLibrary3D.
+        </div>
+      </div>
+
+      <%= link_to "View All Models",
+            models_path,
+            class: "btn btn-sm btn-outline-primary" %>
+
+    </div>
+
+
+    <div class="card-body">
+
+      <% if @recent_models.any? %>
+
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-3">
+
+          <% @recent_models.each do |model| %>
+
+            <div class="col">
+
+              <div class="card h-100">
+
+                <div class="card-body">
+
+                  <h5 class="card-title mb-2">
+
+                    <%= link_to model.name,
+                          model_path(model),
+                          class: "text-decoration-none" %>
+
+                  </h5>
+
+
+                  <% if model.library %>
+
+                    <div class="small text-muted mb-2">
+                      <%= model.library.name %>
+                    </div>
+
+                  <% end %>
+
+
+                  <div class="small text-muted">
+                    Added
+                    <%= time_ago_in_words(model.created_at) %>
+                    ago
+                  </div>
+
+                </div>
+
+
+                <div class="card-footer bg-transparent">
+
+                  <%= link_to "Open Model",
+                        model_path(model),
+                        class: "btn btn-sm btn-outline-primary w-100" %>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          <% end %>
+
+        </div>
+
+      <% else %>
+
+        <div class="alert alert-info mb-0">
+          No models are currently available to this account.
+        </div>
+
+      <% end %>
+
+    </div>
+
+  </div>
+
+
+  <% if current_user.is_administrator? %>
+
+    <div class="card border-secondary mt-4">
+
+      <div class="card-header">
+        <strong>Administrator</strong>
+      </div>
+
+      <div class="card-body">
+
+        <div class="d-flex flex-wrap gap-2">
+
+          <%= link_to "Storage Management",
+                admin_file_storage_path,
+                class: "btn btn-outline-primary" %>
+
+          <%= link_to "Library Settings",
+                settings_libraries_path,
+                class: "btn btn-outline-secondary" %>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  <% end %>
+
 </div>

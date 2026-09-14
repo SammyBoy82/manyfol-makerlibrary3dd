@@ -1,0 +1,377 @@
+<div class="mb-4">
+
+  <h3>Membership Plans</h3>
+
+  <p class="text-muted">
+    Control which MakerLibrary3D libraries each membership plan can access.
+  </p>
+
+</div>
+
+
+<div class="card mb-4">
+
+  <div class="card-header">
+    <strong>Create Membership Plan</strong>
+  </div>
+
+  <div class="card-body">
+
+    <%= form_with url: settings_membership_plans_path,
+          scope: :membership_plan,
+          method: :post do |f| %>
+
+      <div class="row g-3">
+
+        <div class="col-md-4">
+
+          <%= f.label :name,
+                "Plan Name",
+                class: "form-label" %>
+
+          <%= f.text_field :name,
+                class: "form-control",
+                required: true,
+                placeholder: "Annual Full Library" %>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+          <%= f.label :billing_interval,
+                "Billing",
+                class: "form-label" %>
+
+          <%= f.select :billing_interval,
+                [
+                  ["Monthly", "month"],
+                  ["Annual", "year"],
+                  ["Lifetime", "lifetime"],
+                  ["Custom", "custom"]
+                ],
+                {},
+                class: "form-select" %>
+
+        </div>
+
+
+        <div class="col-md-2">
+
+          <div class="form-check mt-4 pt-2">
+
+            <%= f.check_box :active,
+                  {
+                    class:
+                      "form-check-input",
+                    checked: true
+                  },
+                  "1",
+                  "0" %>
+
+            <%= f.label :active,
+                  "Active",
+                  class:
+                    "form-check-label" %>
+
+          </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+          <div class="form-check mt-4 pt-2">
+
+            <%= f.check_box :all_libraries,
+                  {
+                    class:
+                      "form-check-input"
+                  },
+                  "1",
+                  "0" %>
+
+            <%= f.label :all_libraries,
+                  "All Libraries",
+                  class:
+                    "form-check-label" %>
+
+          </div>
+
+        </div>
+
+
+        <div class="col-12">
+
+          <%= f.label :description,
+                class: "form-label" %>
+
+          <%= f.text_area :description,
+                rows: 2,
+                class: "form-control" %>
+
+        </div>
+
+
+        <div class="col-12">
+
+          <label class="form-label">
+            Allowed Libraries
+          </label>
+
+          <div class="row">
+
+            <% @libraries.each do |library| %>
+
+              <div class="col-md-4">
+
+                <div class="form-check">
+
+                  <%= check_box_tag \
+                        "membership_plan[library_ids][]",
+                        library.id,
+                        false,
+                        id:
+                          "new_plan_library_#{library.id}",
+                        class:
+                          "form-check-input" %>
+
+                  <%= label_tag \
+                        "new_plan_library_#{library.id}",
+                        library.name,
+                        class:
+                          "form-check-label" %>
+
+                </div>
+
+              </div>
+
+            <% end %>
+
+          </div>
+
+        </div>
+
+
+        <div class="col-12">
+
+          <%= f.submit "Create Plan",
+                class: "btn btn-primary" %>
+
+        </div>
+
+      </div>
+
+    <% end %>
+
+  </div>
+
+</div>
+
+
+<% @plans.each do |plan| %>
+
+  <div class="card mb-4">
+
+    <div class="card-header d-flex justify-content-between">
+
+      <div>
+
+        <strong>
+          <%= plan.name %>
+        </strong>
+
+        <% if plan.active? %>
+
+          <span class="badge bg-success ms-2">
+            Active
+          </span>
+
+        <% else %>
+
+          <span class="badge bg-secondary ms-2">
+            Disabled
+          </span>
+
+        <% end %>
+
+        <% if plan.all_libraries? %>
+
+          <span class="badge bg-primary ms-1">
+            All Libraries
+          </span>
+
+        <% end %>
+
+      </div>
+
+      <span class="badge bg-secondary">
+        <%= plan.users.size %> member(s)
+      </span>
+
+    </div>
+
+
+    <div class="card-body">
+
+      <%= form_with model: plan,
+            url:
+              settings_membership_plan_path(plan),
+            method: :patch do |f| %>
+
+        <div class="row g-3">
+
+          <div class="col-md-4">
+
+            <%= f.label :name,
+                  class: "form-label" %>
+
+            <%= f.text_field :name,
+                  class: "form-control" %>
+
+          </div>
+
+
+          <div class="col-md-3">
+
+            <%= f.label :billing_interval,
+                  "Billing",
+                  class: "form-label" %>
+
+            <%= f.select :billing_interval,
+                  [
+                    ["Monthly", "month"],
+                    ["Annual", "year"],
+                    ["Lifetime", "lifetime"],
+                    ["Custom", "custom"]
+                  ],
+                  {},
+                  class: "form-select" %>
+
+          </div>
+
+
+          <div class="col-md-2">
+
+            <div class="form-check mt-4 pt-2">
+
+              <%= f.check_box :active,
+                    class:
+                      "form-check-input" %>
+
+              <%= f.label :active,
+                    class:
+                      "form-check-label" %>
+
+            </div>
+
+          </div>
+
+
+          <div class="col-md-3">
+
+            <div class="form-check mt-4 pt-2">
+
+              <%= f.check_box :all_libraries,
+                    class:
+                      "form-check-input" %>
+
+              <%= f.label :all_libraries,
+                    "All Libraries",
+                    class:
+                      "form-check-label" %>
+
+            </div>
+
+          </div>
+
+
+          <div class="col-12">
+
+            <%= f.text_area :description,
+                  rows: 2,
+                  class: "form-control",
+                  placeholder:
+                    "Plan description" %>
+
+          </div>
+
+
+          <div class="col-12">
+
+            <strong>
+              Library Entitlements
+            </strong>
+
+            <div class="row mt-2">
+
+              <% @libraries.each do |library| %>
+
+                <div class="col-md-4">
+
+                  <div class="form-check">
+
+                    <%= check_box_tag \
+                          "membership_plan[library_ids][]",
+                          library.id,
+                          plan.library_ids.include?(library.id),
+                          id:
+                            "plan_#{plan.id}_library_#{library.id}",
+                          class:
+                            "form-check-input" %>
+
+                    <%= label_tag \
+                          "plan_#{plan.id}_library_#{library.id}",
+                          library.name,
+                          class:
+                            "form-check-label" %>
+
+                  </div>
+
+                </div>
+
+              <% end %>
+
+            </div>
+
+          </div>
+
+
+          <div class="col-12">
+
+            <%= f.submit "Save Plan",
+                  class:
+                    "btn btn-primary" %>
+
+          </div>
+
+        </div>
+
+      <% end %>
+
+
+      <% if plan.users.empty? %>
+
+        <div class="mt-3">
+
+          <%= button_to "Delete Plan",
+                settings_membership_plan_path(plan),
+                method: :delete,
+                class:
+                  "btn btn-sm btn-outline-danger",
+                form: {
+                  data: {
+                    turbo_confirm:
+                      "Delete #{plan.name}?"
+                  }
+                } %>
+
+        </div>
+
+      <% end %>
+
+    </div>
+
+  </div>
+
+<% end %>

@@ -14,7 +14,13 @@ class LibrariesController < ApplicationController
 
   def new
     authorize Library
-    @library = Library.new
+
+    @library =
+      Library.new(
+        path: params[:path].presence,
+        name: params[:name].presence
+      )
+
     @title = t("libraries.general.new")
   end
 

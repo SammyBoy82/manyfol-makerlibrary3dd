@@ -1,0 +1,75 @@
+module PreviewEnrichment
+  class ScanLibraryJob < ApplicationJob
+    queue_as :default
+
+    def perform(library_id)
+      library = Library.find_by(id: library_id)
+      return unless library
+
+      cache_key = self.class.cache_key(library.id)
+
+      Rails.logger.info(
+        {
+          event: "preview_enrichment_library_scan_started",
+          library_id: library.id,
+          library_name: library.name
+        }.to_json
+      )
+
+      scanned = 0
+      eligible = 0
+      discovered = 0
+      persisted = 0
+      failed = 0
+
+      library.models.find_each do |model|
+        scanned += 1
+
+        begin
+          eligibility = PreviewEnrichment::Eligibility.new(model)
+
+          next unless eligibility.eligible?
+
+          eligible += 1
+
+          result = PreviewEnrichment::Runner.new(model).call
+
+          discovered += result[:discovered].to_i
+          persisted += result[:persisted].to_i
+        rescue => error
+          failed += 1
+
+          Rails.logger.error(
+            {
+              event: "preview_enrichment_model_scan_failed",
+              library_id: library.id,
+              model_id: model.id,
+              model_name: model.name,
+              error_class: error.class.name,
+              error: error.message
+            }.to_json
+          )
+        end
+      end
+
+      Rails.logger.info(
+        {
+          event: "preview_enrichment_library_scan_completed",
+          library_id: library.id,
+          library_name: library.name,
+          models_scanned: scanned,
+          eligible_models: eligible,
+          candidates_discovered: discovered,
+          candidates_persisted: persisted,
+          failed_models: failed
+        }.to_json
+      )
+    ensure
+      Rails.cache.delete(cache_key) if defined?(cache_key) && cache_key
+    end
+
+    def self.cache_key(library_id)
+      "preview_enrichment:library_scan:#{library_id}"
+    end
+  end
+end

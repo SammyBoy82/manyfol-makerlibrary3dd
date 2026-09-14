@@ -13,6 +13,12 @@ class User < ApplicationRecord
 
   DEFAULT_TOUR_STATE = {"completed" => []}
 
+  MEMBERSHIP_STATUSES = %w[
+    active
+    suspended
+  ].freeze
+
+
   # Creator ownership relation used for auto-creation
   has_many :creators, -> { where("caber_relations.permission": "own") }, through: :caber_relations, source_type: "Creator", source: :object
   accepts_nested_attributes_for :creators
@@ -73,6 +79,15 @@ class User < ApplicationRecord
 
   validates :landing_page, inclusion: {in: SiteSettings::LANDING_PAGES, allow_nil: true}, if: -> { has_attribute? :landing_page }
 
+
+  validates :membership_status,
+    inclusion: {
+      in: MEMBERSHIP_STATUSES
+    },
+    if: -> {
+      has_attribute?(:membership_status)
+    }
+
   has_many :access_grants, # rubocop:disable Rails/InverseOf
     class_name: "Doorkeeper::AccessGrant",
     foreign_key: :resource_owner_id,
@@ -91,6 +106,9 @@ class User < ApplicationRecord
 
   has_many :memberships, dependent: :destroy
   has_many :groups, through: :memberships
+
+  belongs_to :membership_plan,
+    optional: true
 
   attr_writer :skip_invitation
 
@@ -141,6 +159,55 @@ class User < ApplicationRecord
     has_any_role_of? :administrator, :moderator, :contributor, :member
   end
 
+
+  def membership_expired?
+    return false if is_administrator?
+    return false unless has_attribute?(:membership_expires_at)
+    return false if membership_expires_at.blank?
+
+    membership_expires_at <= Time.current
+  end
+
+  def effective_membership_status
+    return "active" if is_administrator?
+    return "expired" if membership_expired?
+
+    membership_status.presence || "active"
+  end
+
+  def membership_access_active?
+    return true if is_administrator?
+
+    approved? &&
+      effective_membership_status == "active"
+  end
+
+
+  def entitled_to_library?(library)
+    return true if is_moderator?
+    return false unless membership_access_active?
+
+    plan =
+      membership_plan
+
+    return false unless plan&.active?
+
+    plan.grants_library?(library)
+  end
+
+  def entitled_library_ids
+    return Library.pluck(:id) if is_moderator?
+
+    plan =
+      membership_plan
+
+    return [] unless membership_access_active?
+    return [] unless plan&.active?
+    return Library.pluck(:id) if plan.all_libraries?
+
+    plan.library_ids
+  end
+
   def problem_severity(category)
     problem_settings[category.to_s]&.to_sym || Problem::DEFAULT_SEVERITIES[category.to_sym]
   end
@@ -184,7 +251,9 @@ class User < ApplicationRecord
 
   # Devise approval checks
   def active_for_authentication?
-    super && approved?
+    super &&
+      approved? &&
+      membership_access_active?
   end
 
   def inactive_message

@@ -1,0 +1,586 @@
+#!/usr/bin/env python3
+"""MakerLibrary3D 4.9.1-rc2-hf1. Existing host queue, multi-provider implementation."""
+import base64
+import fcntl
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+
+CONFIG = Path('/srv/slforge/docker/manyfold/config')
+REQUEST_DIR = CONFIG / 'storage-requests'
+STATUS_DIR = CONFIG / 'storage-status'
+REGISTRY_DIR = CONFIG / 'storage-sources'
+ROOT = Path('/srv/slforge/storage-sources')
+PRIVATE = Path('/etc/slforge-storage')
+STATE = PRIVATE / 'sources'
+INFLIGHT = PRIVATE / 'inflight'
+UNITS = Path('/etc/systemd/system')
+VERSIONS = {'auto', '3.1.1', '3.0', '2.1'}
+RESERVED = {'local', 'azure', 'smb', 'all', 'tests', 'animals', '3d-printing'}
+
+class StorageError(Exception):
+    pass
+
+
+def run(args, timeout=90):
+    try:
+        return subprocess.run([str(a) for a in args], check=True, text=True,
+                              capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise StorageError(f'{Path(args[0]).name} timed out; check source connectivity.') from None
+    except subprocess.CalledProcessError:
+        # Do not copy remote output, shell arguments, account keys or credentials to status/logs.
+        raise StorageError(f'{Path(args[0]).name} failed; check connectivity, credentials and permissions.') from None
+
+
+def safe_path(path):
+    """Reject symlink components, including missing final paths."""
+    path = Path(path)
+    for item in [path, *path.parents]:
+        if item.is_symlink():
+            raise StorageError('A managed path contains a symbolic link.')
+    return path
+
+
+def mkdir(path, mode=0o700):
+    safe_path(path)
+    path.mkdir(parents=True, exist_ok=True, mode=mode)
+    os.chmod(path, mode)
+
+
+def atomic(path, value, mode=0o600):
+    safe_path(path)
+    tmp = path.parent / ('.' + uuid.uuid4().hex + '.tmp')
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(value if isinstance(value, str) else json.dumps(value, indent=2) + '\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def read_json(path, owner=None):
+    safe_path(path)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd) as stream:
+        st = os.fstat(stream.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > 32768:
+            raise StorageError('Invalid request or metadata file.')
+        if owner is not None and (st.st_uid not in owner or st.st_mode & 0o077):
+            raise StorageError('Request must be private and owned by the application or root.')
+        data = json.loads(stream.read(32769))
+        if not isinstance(data, dict):
+            raise StorageError('Request must be a JSON object.')
+        return data
+
+
+def valid_slug(slug):
+    return isinstance(slug, str) and bool(re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}', slug)) and slug not in RESERVED
+
+
+def text_field(data, name, pattern=None, maximum=128, required=True, strip=True):
+    value = data.get(name, '')
+    if not isinstance(value, str):
+        raise StorageError(f'Invalid {name}.')
+    if strip:
+        value = value.strip()
+    if (required and not value) or len(value) > maximum or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise StorageError(f'Invalid {name}.')
+    if pattern and value and not re.fullmatch(pattern, value):
+        raise StorageError(f'Invalid {name}.')
+    return value
+
+
+def validate(data):
+    slug = data.get('slug', '')
+    if not valid_slug(slug):
+        raise StorageError('Invalid or reserved mount name.')
+    provider = data.get('provider', 'azure')
+    if provider not in {'smb', 'azure', 'local'}:
+        raise StorageError('Unsupported provider.')
+    if type(data.get('read_only', False)) is not bool:
+        raise StorageError('read_only must be a boolean.')
+    result = dict(slug=slug, provider=provider, display_name=text_field(data, 'display_name', maximum=80),
+                  read_only=data.get('read_only', False))
+    if provider == 'smb':
+        result.update(server=text_field(data, 'server', r'[A-Za-z0-9][A-Za-z0-9.-]{0,252}'),
+                      share=text_field(data, 'share', r'[A-Za-z0-9_$][A-Za-z0-9 _.$-]{0,79}', maximum=80),
+                      username=text_field(data, 'username', maximum=128),
+                      password=text_field(data, 'password', maximum=1024, strip=False),
+                      domain=text_field(data, 'domain', r'[A-Za-z0-9_.-]{1,128}', required=False),
+                      smb_version=data.get('smb_version', 'auto'))
+        if result['username'] != result['username'].strip() or result['password'] != result['password'].strip():
+            raise StorageError('Leading/trailing credential whitespace is not supported by the credential-file format.')
+        if result['smb_version'] not in VERSIONS:
+            raise StorageError('Unsupported SMB version.')
+        azure_host = re.fullmatch(r'([a-z0-9]{3,24})\.file\.core\.windows\.net', result['server'], re.I)
+        kind = 'azure_files' if azure_host else data.get('smb_kind', 'generic')
+        if kind not in {'generic', 'azure_files'}:
+            raise StorageError('Invalid SMB connection type.')
+        result['smb_kind'] = kind
+        if kind == 'azure_files':
+            if not azure_host or result['username'].lower() != azure_host.group(1).lower():
+                raise StorageError('Azure Files server and account username must match.')
+            if result['domain'].lower() not in {'', 'localhost'}:
+                raise StorageError('Azure Files account-key connections require an empty domain.')
+            result['domain'] = ''
+            if result['smb_version'] == 'auto':
+                result['smb_version'] = '3.1.1'
+            if result['smb_version'] not in {'3.0', '3.1.1'}:
+                raise StorageError('Azure Files requires SMB 3.0 or 3.1.1.')
+            try:
+                if len(base64.b64decode(result['password'], validate=True)) != 64:
+                    raise ValueError()
+            except ValueError:
+                raise StorageError('Azure Files requires an unmasked account key.') from None
+    elif provider == 'azure':
+        result.update(account_name=text_field(data, 'account_name', r'[a-z0-9]{3,24}'),
+                      container_name=text_field(data, 'container_name', r'[a-z0-9][a-z0-9-]{1,61}[a-z0-9]'),
+                      account_key=text_field(data, 'account_key', maximum=256))
+        if '--' in result['container_name']:
+            raise StorageError('Invalid Azure container name.')
+        try:
+            if len(base64.b64decode(result['account_key'], validate=True)) != 64:
+                raise ValueError()
+        except ValueError:
+            raise StorageError('An Azure account access key is required.') from None
+        frozen = read_json(PRIVATE / 'freeze.json').get('azure_accounts', [])
+        if result['account_name'] in frozen:
+            raise StorageError('This Azure account is frozen for the current development phase.')
+    elif result['read_only']:
+        raise StorageError('Local sources use existing filesystem permissions; the read-only toggle is for remote providers.')
+    return result
+
+
+def status(rid, data, state, message, **extra):
+    payload = {k: data[k] for k in ('slug', 'display_name', 'provider', 'action', 'container_path') if k in data}
+    payload.update(state=state, message=message, updated_at=time.time(), **extra)
+    atomic(STATUS_DIR / f'{rid}.json', payload, 0o644)
+
+
+def paths(data):
+    return (ROOT / data['provider'] / data['slug'],
+            f"/storage-sources/{data['provider']}/{data['slug']}")
+
+
+def mounted(path):
+    return subprocess.run(['/usr/bin/mountpoint', '-q', str(path)], capture_output=True).returncode == 0
+
+
+def ensure_mount(path):
+    if not mounted(path):
+        raise StorageError('The exact backing mount is absent; refusing to use its empty directory.')
+
+
+def probe(path, read_only):
+    # Probe as the Manyfold UID in a separate, bounded process, never as root.
+    code = '''import os,sys,uuid,json
+from pathlib import Path
+p=Path(sys.argv[1]); sample=[]
+with os.scandir(p) as entries:
+ for _, entry in zip(range(100), entries): sample.append(entry.name)
+if sys.argv[2]=='rw':
+ q=p/('.makerlibrary-probe-'+uuid.uuid4().hex)
+ try:
+  with q.open('x') as f: f.write('makerlibrary-storage-check')
+  if q.read_text()!='makerlibrary-storage-check': raise OSError('Probe mismatch')
+ finally:
+  q.unlink(missing_ok=True)
+print(json.dumps({'sampled_entries':len(sample)}))'''
+    result = run(['/usr/bin/setpriv', '--reuid=1500', '--regid=1500', '--clear-groups',
+                  '/usr/bin/python3', '-c', code, path, 'ro' if read_only else 'rw'], timeout=30)
+    return json.loads(result.stdout)
+
+
+def container_probe(data):
+    _, path = paths(data)
+    code = '''require "json"
+p=ARGV.fetch(0)
+if ARGV.fetch(1)=="mount"
+ found=File.readlines("/proc/self/mountinfo").any?{|l| l.split[4]==p}
+ abort "Backing mount is absent" unless found
+end
+abort "Unreadable storage" unless File.directory?(p) && File.readable?(p)
+Dir.open(p){|d| d.each.take(1)}
+puts "CONTAINER_STORAGE_OK"
+'''
+    run(['/usr/bin/docker', 'exec', '--user', '1500:1500', 'slforge-manyfold', 'ruby', '-e', code,
+         path, 'local' if data['provider'] == 'local' else 'mount'], timeout=30)
+
+
+def credential(data, path):
+    if data['provider'] == 'smb':
+        content = f"username={data['username']}\npassword={data['password']}\n"
+        if data['domain']:
+            content += f"domain={data['domain']}\n"
+    else:
+        cache = PRIVATE / 'cache' / data['slug']
+        mkdir(cache)
+        content = f'''allow-other: true
+logging:
+  type: syslog
+  level: log_warning
+components:
+  - libfuse
+  - block_cache
+  - attr_cache
+  - azstorage
+libfuse:
+  attribute-expiration-sec: 120
+  entry-expiration-sec: 120
+  negative-entry-expiration-sec: 30
+block_cache:
+  block-size-mb: 16
+  mem-size-mb: 512
+  disk-size-mb: 4096
+  path: {cache}
+  disk-timeout-sec: 120
+  parallelism: 4
+attr_cache:
+  timeout-sec: 120
+azstorage:
+  type: block
+  account-name: {data['account_name']}
+  container: {data['container_name']}
+  endpoint: https://{data['account_name']}.blob.core.windows.net
+  mode: key
+  account-key: {json.dumps(data['account_key'])}
+'''
+    atomic(path, content)
+
+
+def mount_command(data, mount, secret):
+    if data['provider'] == 'smb':
+        opts = [f'credentials={secret}', 'uid=1500', 'gid=1500', 'forceuid', 'forcegid',
+                'file_mode=0660', 'dir_mode=0770', 'nosuid', 'nodev', 'noexec', 'nounix',
+                'ro' if data['read_only'] else 'rw']
+        if data.get('smb_kind') == 'azure_files':
+            opts.extend(['seal', 'serverino', 'nosharesock', 'actimeo=30'])
+        # Kernel default negotiates SMB2.1+; there is no SMB1 option in this wizard.
+        if data['smb_version'] != 'auto':
+            opts.append('vers=' + data['smb_version'])
+        return ['/usr/sbin/mount.cifs', f"//{data['server']}/{data['share']}", str(mount), '-o', ','.join(opts)]
+    cmd = ['/usr/bin/blobfuse2', 'mount', str(mount), f'--config-file={secret}', '--allow-other',
+           '-o', 'uid=1500,gid=1500,umask=0007,nosuid,nodev,noexec']
+    if data['read_only']:
+        cmd.append('--read-only=true')
+    return cmd
+
+
+def detach(data, mount):
+    if mounted(mount):
+        command = '/usr/bin/umount' if data['provider'] == 'smb' else '/bin/fusermount3'
+        run([command, *(['-u'] if data['provider'] == 'azure' else []), mount], timeout=60)
+    if mounted(mount):
+        raise StorageError('Unmount failed. Mount and credentials were retained for recovery.')
+
+
+def test_connection(data, rid):
+    if data['provider'] == 'local':
+        mount, _ = paths(data)
+        safe_path(mount)
+        if not mount.is_dir():
+            raise StorageError('Local directory does not exist yet. Use Test & Create to create an empty local source.')
+        return probe(mount, False)
+    mount = ROOT / '.tests' / rid
+    secret = PRIVATE / 'tests' / (rid + '.conf')
+    mkdir(mount, 0o000)
+    credential(dict(data, slug="test-" + rid), secret)
+    try:
+        # Azure Files account-key authentication is tested by the same encrypted
+        # CIFS mount used in production. smbclient applies its own domain/auth
+        # defaults and can reject a valid Azure Files key before CIFS is tried.
+        if data['provider'] == 'smb' and data.get('smb_kind') != 'azure_files':
+            protocol = {'auto': 'SMB3', '3.1.1': 'SMB3_11', '3.0': 'SMB3_00', '2.1': 'SMB2_10'}[data['smb_version']]
+            run(['/usr/bin/smbclient', f"//{data['server']}/{data['share']}", '-A', secret,
+                 '--option=client min protocol=SMB2_10', '-m', protocol, '-c', 'quit'], timeout=30)
+        run(mount_command(data, mount, secret), timeout=120)
+        ensure_mount(mount)
+        return probe(mount, data['read_only'])
+    finally:
+        # No recursive deletion; if detach fails, retain the secret and mount for repair.
+        detach(data, mount)
+        secret.unlink(missing_ok=True)
+        mount.rmdir()
+
+
+def unit_definition(data, mount, secret):
+    if data['provider'] == 'smb':
+        name = run(['/usr/bin/systemd-escape', '--path', '--suffix=mount', mount]).stdout.strip()
+        cmd = mount_command(data, mount, secret)
+        unit = f'''[Unit]
+Description=MakerLibrary3D SMB {data['slug']}
+Wants=network-online.target
+After=network-online.target slforge-storage-propagation.service
+Requires=slforge-storage-propagation.service
+[Mount]
+What={cmd[1]}
+Where={mount}
+Type=cifs
+Options={cmd[-1]}
+TimeoutSec=120
+[Install]
+WantedBy=multi-user.target
+'''
+    else:
+        name = f"makerlibrary-storage-v491-{data['slug']}.service"
+        cmd = mount_command(data, mount, secret)
+        # All interpolated values are validated or generated fixed paths; secrets are never in argv.
+        unit = f'''[Unit]
+Description=MakerLibrary3D Azure {data['slug']}
+Wants=network-online.target
+After=network-online.target slforge-storage-propagation.service
+Requires=slforge-storage-propagation.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={' '.join(cmd)}
+ExecStop=/bin/fusermount3 -u {mount}
+TimeoutStartSec=120
+TimeoutStopSec=60
+[Install]
+WantedBy=multi-user.target
+'''
+    return name, unit
+
+
+def publish(data):
+    # Only non-secret metadata enters the public registry. Root actions use the private registry.
+    atomic(STATE / (data['slug'] + '.json'), data)
+    atomic(REGISTRY_DIR / (data['slug'] + '.json'), data, 0o644)
+
+
+def create(data, rid):
+    slug = data['slug']
+    mount, container = paths(data)
+    secret = PRIVATE / data['provider'] / (slug + '.conf')
+    if (REGISTRY_DIR / (slug + '.json')).exists() or (STATE / (slug + '.json')).exists():
+        raise StorageError('Mount name already exists; choose another name.')
+    safe_path(mount)
+    if data['provider'] != 'local' and mount.exists():
+        raise StorageError('Mount directory already exists; refusing to adopt or overwrite it.')
+    if secret.exists():
+        raise StorageError('Credentials already exist; inspect the previous failed attempt first.')
+    status(rid, data, 'testing', 'Testing connection and application access.')
+    if data['provider'] != 'local':
+        test_connection(data, rid)
+    name = None
+    unit_created = False
+    try:
+        if data['provider'] == 'local':
+            if not mount.exists():
+                mount.mkdir(mode=0o770)
+                os.chown(mount, 1500, 1500)
+            probe(mount, False)
+        else:
+            mkdir(mount, 0o000)
+            credential(data, secret)
+            name, unit = unit_definition(data, mount, secret)
+            if (UNITS / name).exists():
+                raise StorageError('Persistent unit already exists; refusing to overwrite it.')
+            atomic(UNITS / name, unit, 0o644)
+            unit_created = True
+            run(['/usr/bin/systemd-analyze', 'verify', UNITS / name])
+            status(rid, data, 'creating', 'Creating persistent mount.')
+            run(['/usr/bin/systemctl', 'daemon-reload'])
+            run(['/usr/bin/systemctl', 'enable', '--now', name], timeout=150)
+            ensure_mount(mount)
+            probe(mount, data['read_only'])
+        container_probe(data)
+        clean = {k: v for k, v in data.items() if k not in {'password', 'account_key', 'username', 'domain'}}
+        clean.update(schema_version=491, kind={'smb': 'SMB / CIFS', 'azure': 'Azure Blob / BlobFuse2',
+                     'local': 'Local filesystem'}[data['provider']], host_path=str(mount), container_path=container,
+                     systemd_unit=name, credential_path=str(secret) if name else None, connected=True)
+        if clean.get('smb_kind') == 'azure_files':
+            clean['kind'] = 'Azure Files / encrypted SMB'
+        publish(clean)
+        status(rid, clean, 'mounted', 'Source verified in Manyfold. You can now register a writable library; no scan was started.')
+    except Exception:
+        if unit_created and name and (UNITS / name).exists():
+            try:
+                run(['/usr/bin/systemctl', 'disable', '--now', name], timeout=90)
+                detach(data, mount)
+                (UNITS / name).unlink()
+                run(['/usr/bin/systemctl', 'daemon-reload'])
+                secret.unlink(missing_ok=True)
+                mount.rmdir()
+                (STATE / (slug + '.json')).unlink(missing_ok=True)
+                (REGISTRY_DIR / (slug + '.json')).unlink(missing_ok=True)
+            except Exception:
+                raise StorageError('Create failed and cleanup needs attention. Local mount/configuration retained; remote data was not deleted.') from None
+        raise
+
+
+def managed(slug):
+    if not valid_slug(slug) or not (STATE / (slug + '.json')).is_file():
+        raise StorageError('Legacy and production sources are frozen. Only sources created by v4.9.1 can be changed.')
+    data = read_json(STATE / (slug + '.json'), {0})
+    mount, container = paths(data)
+    if data.get('schema_version') != 491 or data.get('host_path') != str(mount) or data.get('container_path') != container:
+        raise StorageError('Private source metadata is inconsistent.')
+    safe_path(mount)
+    return data
+
+
+def unattached(data):
+    # Read-only query immediately before unmount. Never trust a boolean sent by Rails.
+    code = '''require "json"
+root=ENV.fetch("ML_STORAGE_ROOT")
+used=Library.where(storage_service: "filesystem").pluck(:path).any?{|p| p==root || p.start_with?(root+"/") || root.start_with?(p+"/")}
+abort "Source has attached libraries" if used
+puts "UNATTACHED"
+'''
+    run(['/usr/bin/docker', 'exec', '--user', '1500:1500', '-e', 'RAILS_ENV=production', '-e',
+         'ML_STORAGE_ROOT=' + data['container_path'], 'slforge-manyfold', 'bin/rails', 'runner', code], timeout=90)
+
+
+def lifecycle(data, action):
+    mount, _ = paths(data)
+    unit = data.get('systemd_unit')
+    if action in {'remove', 'disconnect', 'remount'}:
+        unattached(data)
+    if action == 'remount':
+        if unit:
+            run(['/usr/bin/systemctl', 'enable', '--now', unit], timeout=150)
+            ensure_mount(mount)
+        probe(mount, data['read_only'])
+        container_probe(data)
+        data['connected'] = True
+        publish(data)
+    elif action in {'disconnect', 'remove'}:
+        if unit:
+            run(['/usr/bin/systemctl', 'disable', '--now', unit], timeout=90)
+            detach(data, mount)
+        data['connected'] = False
+        if action == 'remove':
+            if unit:
+                (UNITS / unit).unlink(missing_ok=True)
+                run(['/usr/bin/systemctl', 'daemon-reload'])
+                safe_path(Path(data['credential_path'])).unlink(missing_ok=True)
+                try:
+                    mount.rmdir()
+                except OSError:
+                    pass
+            # Keep local source files and Azure cache; never recursively delete content.
+            (STATE / (data['slug'] + '.json')).unlink()
+            (REGISTRY_DIR / (data['slug'] + '.json')).unlink(missing_ok=True)
+        else:
+            publish(data)
+
+
+def process(path):
+    rid = path.stem
+    if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', rid):
+        # Retire invalid queue names without following links or writing attacker-selected status paths.
+        if path.is_dir() and not path.is_symlink():
+            path.rename(path.with_name('.rejected-' + uuid.uuid4().hex))
+        else:
+            path.unlink(missing_ok=True)
+        return
+    data = {}
+    claimed = INFLIGHT / (rid + '.json')
+    try:
+        data = read_json(path, {0, 1500})
+        atomic(claimed, data)
+        path.unlink()
+        action = data.get('action', 'create')
+        data['action'] = action
+        if action in {'test', 'create'}:
+            clean = validate(data)
+            clean['action'] = action
+            data = clean
+            if action == 'create':
+                create(clean, rid)
+            else:
+                status(rid, clean, 'testing', 'Testing credentials and mount access.')
+                test_connection(clean, rid)
+                status(rid, clean, 'test_passed', 'Connection test passed. Re-enter the credentials to create the source.')
+        elif action == 'health_all':
+            for item in sorted(STATE.glob('*.json')):
+                source = managed(item.stem)
+                if source.get('connected'):
+                    health(source, str(uuid.uuid4()))
+            status(rid, {}, 'completed', 'Health check completed for v4.9.1 sources. Legacy sources are frozen.')
+        else:
+            source = managed(data.get('slug', ''))
+            source['action'] = action
+            if action == 'health':
+                health(source, rid)
+            elif action == 'rename':
+                source['display_name'] = text_field(data, 'display_name', maximum=80)
+                publish(source)
+                status(rid, source, 'renamed', 'Display name updated.')
+            elif action in {'remove', 'disconnect', 'remount'}:
+                lifecycle(source, action)
+                status(rid, source, {'remove': 'removed', 'disconnect': 'disconnected', 'remount': 'mounted'}[action],
+                       'Operation completed. Source files were not deleted.')
+            else:
+                raise StorageError('Unsupported storage action.')
+    except StorageError as error:
+        status(rid, data, 'failed', str(error))
+    except Exception:
+        status(rid, {}, 'failed', 'Request failed validation or processing. No secret details are logged.')
+    finally:
+        claimed.unlink(missing_ok=True)
+        if path.is_dir() and not path.is_symlink():
+            path.rename(path.with_name('.rejected-' + uuid.uuid4().hex))
+        else:
+            path.unlink(missing_ok=True)
+
+
+def health(data, rid):
+    try:
+        mount, _ = paths(data)
+        if not data.get('connected'):
+            raise StorageError('Source is disconnected.')
+        if data['provider'] != 'local':
+            ensure_mount(mount)
+        probe(mount, True)  # Scheduled health checks never write to source data.
+        status(rid, dict(data, action='health'), 'passed', 'Mount and UID 1500 read access verified.')
+    except StorageError as error:
+        status(rid, dict(data, action='health'), 'failed', str(error))
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in {'process-queue', 'health-all'}:
+        raise SystemExit('Usage: makerlibrary-storage-helper process-queue|health-all')
+    if os.geteuid() != 0:
+        raise SystemExit('Root is required.')
+    mkdir(PRIVATE)
+    with open(PRIVATE / 'agent.lock', 'a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for directory in [STATE, INFLIGHT, PRIVATE/'tests', PRIVATE/'smb', PRIVATE/'azure', PRIVATE/'local']:
+            mkdir(directory)
+        for directory in [ROOT/'smb', ROOT/'azure', ROOT/'local', ROOT/'.tests']:
+            safe_path(directory)
+            directory.mkdir(mode=0o755, parents=True, exist_ok=True)
+        for directory in [REQUEST_DIR, STATUS_DIR, REGISTRY_DIR]:
+            safe_path(directory)
+            if not directory.is_dir():
+                raise StorageError('Queue/registry directories must be prepared by the installer.')
+        # Interrupted requests are not blindly replayed: a mount may already have succeeded.
+        for path in INFLIGHT.glob('*.json'):
+            status(path.stem, {}, 'failed', 'Previous request was interrupted. Inspect its mount before retrying.')
+            path.unlink()
+        if sys.argv[1] == 'health-all':
+            for path in sorted(STATE.glob('*.json')):
+                health(managed(path.stem), str(uuid.uuid4()))
+        else:
+            fd = os.open(CONFIG / 'storage-lifecycle.lock', os.O_RDWR | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'r+') as lifecycle_lock:
+                fcntl.flock(lifecycle_lock, fcntl.LOCK_EX)
+                for path in sorted(REQUEST_DIR.glob('*.json')):
+                    process(path)
+
+
+if __name__ == '__main__':
+    main()

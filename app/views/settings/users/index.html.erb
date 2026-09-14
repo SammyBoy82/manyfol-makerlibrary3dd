@@ -1,40 +1,411 @@
-<h3><%= t(".title") %></h3>
+<div class="d-flex justify-content-between align-items-start mb-3">
 
-<%= link_to t(".new"), new_settings_user_path, class: "btn btn-primary float-end" if policy(:user).new? %>
-<p class="lead"><%= t(".description") %></p>
+  <div>
+    <h3>MakerLibrary3D Members</h3>
+
+    <p class="text-muted mb-0">
+      Manage member access, roles, expiry and subscription lifecycle.
+    </p>
+  </div>
+
+  <% if policy(:user).new? %>
+    <%= link_to "Add Member",
+          new_settings_user_path,
+          class: "btn btn-primary" %>
+  <% end %>
+
+</div>
+
+
+<div class="card mb-4">
+  <div class="card-body">
+
+    <%= form_with url: settings_users_path,
+          method: :get,
+          class: "row g-2 align-items-end" do |f| %>
+
+      <div class="col-md-4">
+        <%= f.label :q, "Search", class: "form-label" %>
+
+        <%= f.search_field :q,
+              value: @query,
+              class: "form-control",
+              placeholder: "Username or email…" %>
+      </div>
+
+      <div class="col-md-3">
+        <%= f.label :access,
+              "Membership",
+              class: "form-label" %>
+
+        <%= f.select :access,
+              [
+                ["All", ""],
+                ["Active", "active"],
+                ["Expired", "expired"],
+                ["Suspended", "suspended"]
+              ],
+              {
+                selected: @access_filter
+              },
+              class: "form-select" %>
+      </div>
+
+      <div class="col-md-3">
+        <%= f.label :role,
+              "Role",
+              class: "form-label" %>
+
+        <%= f.select :role,
+              [
+                ["All", ""],
+                ["Member", "member"],
+                ["Contributor", "contributor"],
+                ["Moderator", "moderator"],
+                ["Administrator", "administrator"],
+                ["Printer", "printer"]
+              ],
+              {
+                selected: @role_filter
+              },
+              class: "form-select" %>
+      </div>
+
+      <div class="col-md-2">
+        <%= f.submit "Filter",
+              class: "btn btn-primary w-100" %>
+      </div>
+
+    <% end %>
+
+  </div>
+</div>
+
 
 <%= paginate @users %>
 
-<table class="table table-striped">
-  <tr>
-    <%= ColumnHeader label: User.human_attribute_name(:approved), sort_param: :order, sort_option: "pending", sort_default: true if SiteSettings.approve_signups %>
-    <%= ColumnHeader label: User.human_attribute_name(:username), sort_param: :order, sort_option: "name" %>
-    <%= ColumnHeader label: User.human_attribute_name(:email) %>
-    <%= ColumnHeader label: User.human_attribute_name(:auth_uid) if SiteSettings.oidc_enabled? %>
-    <%= ColumnHeader label: t(".local") if SiteSettings.federation_enabled? %>
-    <%= ColumnHeader label: t(".fediverse_address") if SiteSettings.federation_enabled? %>
-    <%= ColumnHeader label: User.human_attribute_name(:created_at), sort_param: :order, sort_option: "recent" %>
-    <%= ColumnHeader label: Role.model_name.human(count: 100) %>
-    <th></th>
-  </tr>
-  <% @users.each do |user| %>
-    <tr class="<%= user.approved? ? "" : "table-info" %>">
-      <td>
-        <%= Icon(icon: "hourglass", label: "") unless user.approved? %>
-        <%= "✅" if user.approved? %>
-      </td>
-      <td>
-        <%= user.username %>
-      </td>
-      <td><%= masked_email(user.email) %></td>
-      <%= content_tag :td, (user.auth_uid ? "✅" : "❌") if SiteSettings.oidc_enabled? %>
-      <%= content_tag :td, (user.local? ? "✅" : "❌") if SiteSettings.federation_enabled? %>
-      <%= content_tag :td, user.federails_actor&.at_address if SiteSettings.federation_enabled? %>
-      <%= content_tag :td, user.created_at %>
-      <td><%= user.roles&.map(&:name)&.join(", ") %></td>
-      <td><%= link_to safe_join([Icon(icon: "search", label: t(".view")), t(".view")], " "), settings_user_path(user), class: "btn btn-secondary" %></td>
+
+<div class="table-responsive">
+
+<table class="table table-striped align-middle">
+
+  <thead>
+    <tr>
+      <th>Member</th>
+      <th>Status</th>
+      <th>Membership Period</th>
+      <th>Roles</th>
+      <th>Actions</th>
     </tr>
-  <% end %>
+  </thead>
+
+
+  <tbody>
+
+    <% @users.each do |user| %>
+
+      <% membership_state =
+           user.effective_membership_status %>
+
+      <tr>
+
+        <td style="min-width: 180px;">
+
+          <div class="fw-semibold">
+            <%= user.username %>
+
+            <% if user == current_user %>
+              <span class="badge bg-secondary ms-1">
+                You
+              </span>
+            <% end %>
+          </div>
+
+          <div class="small text-muted">
+            <%= masked_email(user.email) %>
+          </div>
+
+          <% if user.membership_admin_notes.present? %>
+            <div class="small text-muted mt-1">
+              <strong>Note:</strong>
+              <%= truncate(
+                    user.membership_admin_notes,
+                    length: 90
+                  ) %>
+            </div>
+          <% end %>
+
+        </td>
+
+
+        <td>
+
+          <% if membership_state == "active" %>
+
+            <span class="badge bg-success">
+              Active
+            </span>
+
+          <% elsif membership_state == "expired" %>
+
+            <span class="badge bg-danger">
+              Expired
+            </span>
+
+          <% else %>
+
+            <span class="badge bg-warning text-dark">
+              Suspended
+            </span>
+
+          <% end %>
+
+
+          <% if user.membership_expires_at.present? &&
+                membership_state == "active" %>
+
+            <% days_remaining =
+                 ((user.membership_expires_at - Time.current) / 1.day)
+                   .ceil %>
+
+            <% if days_remaining <= 30 %>
+
+              <div class="mt-1">
+                <span class="badge bg-warning text-dark">
+                  Expires in
+                  <%= days_remaining %>
+                  day(s)
+                </span>
+              </div>
+
+            <% end %>
+
+          <% end %>
+
+        </td>
+
+
+        <td style="min-width: 190px;">
+
+          <div class="small">
+
+            <strong>Started:</strong>
+
+            <%= user.membership_started_at ?
+                  user.membership_started_at
+                    .in_time_zone
+                    .strftime("%Y-%m-%d") :
+                  "—" %>
+
+          </div>
+
+          <div class="small">
+
+            <strong>Expires:</strong>
+
+            <%= user.membership_expires_at ?
+                  user.membership_expires_at
+                    .in_time_zone
+                    .strftime("%Y-%m-%d") :
+                  "No expiry" %>
+
+          </div>
+
+        </td>
+
+
+        <td>
+
+          <% user.roles.sort_by(&:name).each do |role| %>
+
+            <span class="badge bg-secondary me-1">
+              <%= role.name.humanize %>
+            </span>
+
+          <% end %>
+
+        </td>
+
+
+        <td style="min-width: 420px;">
+
+          <div class="d-flex flex-wrap gap-2 mb-2">
+
+            <%= link_to "View",
+                  settings_user_path(user),
+                  class:
+                    "btn btn-sm btn-outline-secondary" %>
+
+
+            <% if current_user&.is_administrator? %>
+
+              <% [30, 90, 365].each do |days| %>
+
+                <%= button_to "+#{days}d",
+                      extend_membership_settings_user_path(user),
+                      method: :post,
+                      params: {
+                        days: days
+                      },
+                      class:
+                        "btn btn-sm btn-outline-success" %>
+
+              <% end %>
+
+            <% end %>
+
+          </div>
+
+
+          <% if current_user&.is_administrator? %>
+
+            <%= form_with url:
+                  update_membership_settings_user_path(user),
+                  method: :patch,
+                  class: "border rounded p-2" do |f| %>
+
+              <div class="row g-2">
+
+                <div class="col-12">
+                  <label class="form-label small mb-1">
+                    Membership Plan
+                  </label>
+
+                  <%= select_tag :membership_plan_id,
+                        options_from_collection_for_select(
+                          MembershipPlan.enabled.order(:name),
+                          :id,
+                          :name,
+                          user.membership_plan_id
+                        ),
+                        include_blank: "No Membership Plan",
+                        class: "form-select form-select-sm" %>
+                </div>
+
+
+                <div class="col-md-3">
+
+                  <%= select_tag :membership_status,
+                        options_for_select(
+                          [
+                            ["Active", "active"],
+                            ["Suspended", "suspended"]
+                          ],
+                          user.membership_status
+                        ),
+                        class:
+                          "form-select form-select-sm" %>
+
+                </div>
+
+
+                <div class="col-md-3">
+
+                  <%= datetime_local_field_tag \
+                        :membership_started_at,
+                        user.membership_started_at&.
+                          in_time_zone&.
+                          strftime("%Y-%m-%dT%H:%M"),
+                        class:
+                          "form-control form-control-sm",
+                        title:
+                          "Membership start date" %>
+
+                </div>
+
+
+                <div class="col-md-3">
+
+                  <%= datetime_local_field_tag \
+                        :membership_expires_at,
+                        user.membership_expires_at&.
+                          in_time_zone&.
+                          strftime("%Y-%m-%dT%H:%M"),
+                        class:
+                          "form-control form-control-sm",
+                        title:
+                          "Membership expiry date" %>
+
+                </div>
+
+
+                <div class="col-md-3">
+
+                  <%= f.submit "Save Membership",
+                        class:
+                          "btn btn-sm btn-primary w-100" %>
+
+                </div>
+
+
+                <div class="col-12">
+
+                  <%= text_area_tag \
+                        :membership_admin_notes,
+                        user.membership_admin_notes,
+                        rows: 2,
+                        class:
+                          "form-control form-control-sm",
+                        placeholder:
+                          "Private administrator notes…" %>
+
+                </div>
+
+              </div>
+
+            <% end %>
+
+
+            <div class="d-flex gap-2 flex-wrap mt-2">
+
+              <%= form_with url:
+                    set_role_settings_user_path(user),
+                    method: :patch,
+                    class:
+                      "d-inline-flex gap-1" do |f| %>
+
+                <%= select_tag :membership_role,
+                      options_for_select(
+                        [
+                          ["Member", "member"],
+                          ["Contributor", "contributor"],
+                          ["Moderator", "moderator"],
+                          ["Administrator", "administrator"]
+                        ],
+                        if user.is_administrator?
+                          "administrator"
+                        elsif user.has_role?(:moderator)
+                          "moderator"
+                        elsif user.has_role?(:contributor)
+                          "contributor"
+                        else
+                          "member"
+                        end
+                      ),
+                      class:
+                        "form-select form-select-sm" %>
+
+                <%= f.submit "Set Role",
+                      class:
+                        "btn btn-sm btn-outline-primary" %>
+
+              <% end %>
+
+            </div>
+
+          <% end %>
+
+        </td>
+
+      </tr>
+
+    <% end %>
+
+  </tbody>
+
 </table>
+
+</div>
+
 
 <%= paginate @users %>

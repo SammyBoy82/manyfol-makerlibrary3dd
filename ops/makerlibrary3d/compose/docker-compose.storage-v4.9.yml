@@ -1,0 +1,8 @@
+services:
+  manyfold:
+    volumes:
+      - type: bind
+        source: /srv/slforge/storage-sources
+        target: /storage-sources
+        bind:
+          propagation: rshared

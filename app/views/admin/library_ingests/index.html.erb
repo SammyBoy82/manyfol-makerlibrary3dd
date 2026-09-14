@@ -1,0 +1,305 @@
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1>Library Ingestion</h1>
+
+      <p class="text-muted mb-0">
+        MakerLibrary3D automated intake, processing and duplicate control.
+      </p>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap justify-content-end">
+
+      <%= button_to "Run Now",
+            run_now_admin_library_ingests_path,
+            method: :post,
+            class: "btn btn-primary" %>
+
+      <% if @control.paused? %>
+
+        <%= button_to "Resume Automatic Ingestion",
+              resume_admin_library_ingests_path,
+              method: :post,
+              class: "btn btn-success" %>
+
+      <% else %>
+
+        <%= button_to "Pause Automatic Ingestion",
+              pause_admin_library_ingests_path,
+              method: :post,
+              class: "btn btn-outline-warning" %>
+
+      <% end %>
+
+    </div>
+  </div>
+
+  <div class="alert <%= @control.paused? ? "alert-warning" : "alert-success" %>">
+    <strong>
+      Automatic ingestion:
+      <%= @control.paused? ? "PAUSED" : "RUNNING" %>
+    </strong>
+
+    <span class="ms-3">
+      Last run:
+      <%= @control.last_run_at&.to_fs(:short) || "Never" %>
+    </span>
+
+    <span class="ms-3">
+      Last success:
+      <%= @control.last_success_at&.to_fs(:short) || "Never" %>
+    </span>
+
+    <% if @control.last_error.present? %>
+      <div class="mt-2 text-danger">
+        <strong>Watcher error:</strong>
+        <%= @control.last_error %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="row g-3 mb-4">
+
+    <% @summary.each do |status, count| %>
+
+      <div class="col-md">
+        <div class="card h-100">
+          <div class="card-body">
+
+            <div class="text-muted text-capitalize">
+              <%= status %>
+            </div>
+
+            <div class="display-6">
+              <%= count %>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    <% end %>
+
+  </div>
+
+  <div class="card mb-4">
+
+    <div class="card-header">
+      Library Intake Controls
+    </div>
+
+    <div class="table-responsive">
+
+      <table class="table table-striped align-middle mb-0">
+
+        <thead>
+          <tr>
+            <th>Library</th>
+            <th>Storage Path</th>
+            <th>Ingestion</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          <% @libraries.each do |library| %>
+
+            <tr>
+
+              <td>
+                <strong><%= library.name %></strong>
+              </td>
+
+              <td>
+                <code><%= library.path %></code>
+              </td>
+
+              <td>
+                <% if library.ingestion_enabled? %>
+                  <span class="badge text-bg-success">Enabled</span>
+                <% else %>
+                  <span class="badge text-bg-secondary">Disabled</span>
+                <% end %>
+              </td>
+
+              <td>
+                <%= button_to(
+                      library.ingestion_enabled? ? "Disable" : "Enable",
+                      toggle_admin_library_ingestion_path(library),
+                      method: :post,
+                      class:
+                        "btn btn-sm "                         "#{library.ingestion_enabled? ? "btn-outline-danger" : "btn-outline-success"}"
+                    ) %>
+              </td>
+
+            </tr>
+
+          <% end %>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      Recent ingestion activity
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Ingest</th>
+            <th>Processing</th>
+            <th>Duplicate</th>
+            <th>Library</th>
+            <th>Model</th>
+            <th>Source</th>
+            <th>Type</th>
+            <th>Destination</th>
+            <th>Started</th>
+            <th>Completed</th>
+            <th>Error</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% @ingests.each do |ingest| %>
+            <tr>
+              <td>
+                <strong><%= ingest.status %></strong>
+              </td>
+
+              <td>
+                <strong><%= ingest.processing_status %></strong>
+
+                <% if ingest.render_jobs_count.to_i > 0 %>
+                  <br>
+                  <small class="text-muted">
+                    <%= ingest.render_jobs_count %> render job(s)
+                  </small>
+                <% end %>
+
+                <% if ingest.processing_error.present? %>
+                  <br>
+                  <small class="text-danger">
+                    <%= ingest.processing_error %>
+                  </small>
+                <% end %>
+              </td>
+
+              <td>
+                <%= ingest.duplicate_status %>
+
+                <% if ingest.duplicate_model_file %>
+                  <br>
+
+                  <small class="text-muted">
+                    Existing:
+                    <%= link_to ingest.duplicate_model_file.model.name,
+                          model_path(ingest.duplicate_model_file.model) %>
+                  </small>
+                <% end %>
+
+                <% if ingest.duplicate_status == "duplicate_same_library" &&
+                      !ingest.duplicate_override? %>
+                  <br>
+
+                  <%= button_to "Override & Process",
+                        override_duplicate_admin_library_ingest_path(ingest),
+                        method: :post,
+                        class: "btn btn-sm btn-outline-warning mt-1" %>
+                <% end %>
+              </td>
+
+              <td>
+                <%= ingest.library&.name %>
+              </td>
+
+              <td>
+                <% if ingest.model %>
+                  <%= link_to ingest.model.name,
+                        model_path(ingest.model) %>
+                <% else %>
+                  —
+                <% end %>
+              </td>
+
+              <td>
+                <%= ingest.source_name %>
+              </td>
+
+              <td>
+                <%= ingest.source_type %>
+              </td>
+
+              <td>
+                <small><%= ingest.destination_path %></small>
+              </td>
+
+              <td>
+                <%= ingest.started_at&.to_fs(:short) %>
+              </td>
+
+              <td>
+                <%= ingest.completed_at&.to_fs(:short) %>
+              </td>
+
+              <td style="max-width: 350px;">
+                <small><%= ingest.error_message %></small>
+              </td>
+
+              <td>
+                <% if ingest.failed? %>
+                  <%= button_to "Retry",
+                    retry_admin_library_ingest_path(ingest),
+                    method: :post,
+                    class: "btn btn-sm btn-outline-primary" %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+
+          <% if @ingests.empty? %>
+            <tr>
+              <td colspan="12" class="text-center text-muted py-4">
+                No ingestion records yet.
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-header">
+      Import Folder Mapping
+    </div>
+
+    <div class="card-body">
+      <p>
+        Place files or model folders into:
+      </p>
+
+      <pre>/import/library-&lt;library-id&gt;/</pre>
+
+      <ul>
+        <% Library.order(:id).each do |library| %>
+          <li>
+            <code>/import/library-<%= library.id %>/</code>
+            →
+            <strong><%= library.name %></strong>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+  </div>
+</div>

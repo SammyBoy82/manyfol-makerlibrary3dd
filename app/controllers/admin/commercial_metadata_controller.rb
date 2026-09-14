@@ -1,0 +1,161 @@
+module Admin
+  class CommercialMetadataController < ApplicationController
+    before_action :authenticate_user!
+    before_action :require_administrator!
+
+    def index
+      skip_policy_scope
+      skip_authorization
+
+      @query = params[:q].to_s.strip
+      @library_id = params[:library_id].presence
+      @channel = params[:channel].presence
+
+      scope = Model.includes(:library, :model_files).order(:name)
+      scope = scope.where(library_id: @library_id) if @library_id
+      scope = scope.where("models.name ILIKE ?", "%#{Model.sanitize_sql_like(@query)}%") if @query.present?
+
+      if @channel.present?
+        metadata_scope = ModelCommercialMetadata.all
+        metadata_scope = case @channel
+        when "member"
+          metadata_scope.where(member_download_enabled: true)
+        when "digital"
+          metadata_scope.where(digital_sale_enabled: true)
+        when "physical"
+          metadata_scope.where(physical_sale_enabled: true)
+        when "quote"
+          metadata_scope.where(custom_quote_enabled: true)
+        when "featured"
+          metadata_scope.where(featured: true)
+        when "published"
+          metadata_scope.where(storefront_published: true)
+        else
+          metadata_scope
+        end
+        scope = scope.where(id: metadata_scope.select(:model_id))
+      end
+
+      @models = scope.limit(250)
+      @metadata_by_model = ModelCommercialMetadata.where(model_id: @models.map(&:id)).index_by(&:model_id)
+      @readiness_by_model = @models.each_with_object({}) do |model, result|
+        result[model.id] = Admin::CommercialReadiness.call(model: model, metadata: @metadata_by_model[model.id])
+      end
+      @libraries = Library.order(:name)
+
+      shown_readiness = @readiness_by_model.values
+
+      @stats = {
+        models: Model.count,
+        configured: ModelCommercialMetadata.count,
+        digital: ModelCommercialMetadata.digital_sale.count,
+        physical: ModelCommercialMetadata.physical_sale.count,
+        quote: ModelCommercialMetadata.custom_quote.count,
+        featured: ModelCommercialMetadata.featured.count,
+        published: ModelCommercialMetadata.where(storefront_published: true).count,
+        sku_missing: Model.where.not(id: ModelCommercialMetadata.where.not(sku: [nil, ""]).select(:model_id)).count,
+        shown_storefront_ready: shown_readiness.count { |result| result.storefront.ready },
+        shown_attention: shown_readiness.count { |result| result.score < 100 }
+      }
+    end
+
+    def edit
+      skip_policy_scope
+      skip_authorization
+
+      @model = Model.includes(:library).find(params[:model_id])
+      @metadata = ModelCommercialMetadata.find_or_initialize_by(model_id: @model.id)
+    end
+
+    def update
+      skip_authorization
+
+      @model = Model.includes(:library).find(params[:model_id])
+      @metadata = ModelCommercialMetadata.find_or_initialize_by(model_id: @model.id)
+
+      attrs = metadata_params.to_h
+      attrs["digital_price_cents"] = money_to_cents(attrs.delete("digital_price"))
+      attrs["physical_from_price_cents"] = money_to_cents(attrs.delete("physical_from_price"))
+      attrs["sku"] = attrs["sku"].presence
+      attrs["lead_time_days"] = attrs["lead_time_days"].presence
+
+      if @metadata.update(attrs)
+        redirect_to edit_admin_commercial_metadata_path(model_id: @model.id), notice: "Commercial metadata saved for #{@model.name}."
+      else
+        render :edit, status: :unprocessable_entity
+      end
+    end
+
+    def bulk_update
+      skip_authorization
+
+      result = Admin::CommercialBulkUpdater.call(
+        model_ids: params[:model_ids],
+        action: params[:bulk_action],
+        value: params[:bulk_value]
+      )
+
+      message = "Bulk update requested #{result.requested}; updated #{result.updated}; skipped #{result.skipped}."
+      message += " #{result.errors.size} error(s) were left unchanged." if result.errors.any?
+
+      redirect_to admin_commercial_metadata_path(filter_params), notice: message
+    rescue ArgumentError => error
+      redirect_to admin_commercial_metadata_path(filter_params), alert: error.message
+    end
+
+    def generate_skus
+      skip_authorization
+
+      ids = params[:model_ids].presence
+      result = Admin::CommercialSkuGenerator.call(model_ids: ids)
+
+      message = "SKU generation checked #{result.requested} model(s); created #{result.created}; already had SKU #{result.existing}."
+      message += " #{result.errors.size} error(s) were skipped." if result.errors.any?
+
+      redirect_to admin_commercial_metadata_path(filter_params), notice: message
+    end
+
+    private
+
+    def metadata_params
+      params.require(:model_commercial_metadata).permit(
+        :sku,
+        :member_download_enabled,
+        :digital_sale_enabled,
+        :physical_sale_enabled,
+        :custom_quote_enabled,
+        :digital_price,
+        :physical_from_price,
+        :featured,
+        :storefront_published,
+        :lead_time_days,
+        :commercial_notes
+      )
+    end
+
+    def filter_params
+      {
+        q: params[:q].presence,
+        library_id: params[:library_id].presence,
+        channel: params[:channel].presence
+      }.compact
+    end
+
+    def money_to_cents(value)
+      return nil if value.blank?
+
+      decimal = BigDecimal(value.to_s)
+      raise ArgumentError, "Price cannot be negative." if decimal.negative?
+
+      (decimal * 100).round.to_i
+    rescue ArgumentError
+      nil
+    end
+
+    def require_administrator!
+      return if current_user&.is_administrator?
+
+      head :forbidden
+    end
+  end
+end

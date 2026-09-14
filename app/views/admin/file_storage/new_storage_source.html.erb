@@ -1,0 +1,72 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div><div class="text-primary small fw-bold mb-2">MAKERLIBRARY3D · STORAGE</div>
+      <h1 class="h2 mb-2">Connect your collection</h1>
+      <p class="text-muted">Choose a source, verify access, then create your library.</p>
+    </div>
+    <%= link_to "Back to Storage", admin_file_storage_path, class: "btn btn-outline-secondary" %>
+  </div>
+  <% selected = @storage_source_request.provider %>
+  <div class="row g-3 mb-4">
+    <% [["smb", "SMB / Windows / NAS", "Connect Windows, NAS or Azure Files."], ["azure", "Azure Blob", "Connect a new account using an account key."], ["local", "Local folder", "Create or use a folder on this server."]].each do |key, title, subtitle| %>
+      <div class="col-md-4">
+        <%= link_to url_for(action: :new_storage_source, provider: key), class: "card h-100 text-decoration-none shadow-sm #{selected == key ? 'border-primary border-2' : ''}", aria: {current: selected == key ? "page" : nil} do %>
+          <div class="card-body"><h2 class="h5"><%= title %></h2><p class="small text-muted mb-0"><%= subtitle %></p></div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+  <%= form_with model: @storage_source_request, scope: :storage_source, url: admin_storage_sources_path, method: :post, local: true do |form| %>
+    <%= form.hidden_field :provider %>
+    <% if @storage_source_request.errors.any? %>
+      <div class="alert alert-danger" role="alert"><% @storage_source_request.errors.full_messages.each do |message| %><div><%= message %></div><% end %></div>
+    <% end %>
+    <div class="card shadow-sm"><div class="card-body p-4">
+      <h2 class="h5 mb-4">Source details</h2>
+      <div class="row">
+        <div class="col-md-6 mb-3"><%= form.label :display_name, "Display name", class: "form-label" %><%= form.text_field :display_name, class: "form-control form-control-lg", required: true, maxlength: 80, placeholder: "Temporary SMB Test" %></div>
+        <div class="col-md-6 mb-3"><%= form.label :slug, "Mount name", class: "form-label" %><%= form.text_field :slug, class: "form-control form-control-lg", required: true, pattern: "[a-z0-9][a-z0-9-]{1,48}", maxlength: 49, placeholder: "temporary-smb-test" %><div class="form-text">Lowercase letters, numbers and hyphens. Choose a unique name.</div></div>
+      </div>
+      <% if selected == "smb" %>
+        <div class="card bg-light border-primary mb-4"><div class="card-body">
+          <h3 class="h5">Import Azure Files connection</h3>
+          <p class="small text-muted">Paste the Windows connection script from Azure Files → Connect, then import its details. The script is read in your browser and is never executed.</p>
+          <label for="azure-connect-script" class="form-label">Azure connection script</label>
+          <textarea id="azure-connect-script" data-azure-connect-script class="form-control font-monospace" rows="5" maxlength="32768" autocomplete="off" spellcheck="false" placeholder="Paste the Azure portal PowerShell connection script here"></textarea>
+          <button type="button" class="btn btn-outline-primary mt-3" data-import-azure-files>Import Connection Details</button>
+          <div data-azure-import-result hidden role="status" aria-live="polite"></div>
+        </div></div>
+        <div class="mb-3"><%= form.label :smb_kind, "Connection type", class: "form-label" %><%= form.select :smb_kind, [["Windows / NAS", "generic"], ["Azure Files (encrypted SMB)", "azure_files"]], {}, class: "form-select" %></div>
+        <div class="row">
+          <div class="col-md-6 mb-3"><%= form.label :server, "Server / IP address", class: "form-label" %><%= form.text_field :server, class: "form-control", required: true, placeholder: "SAMMYPC or 192.168.1.20", maxlength: 128 %></div>
+          <div class="col-md-6 mb-3"><%= form.label :share, "Share name", class: "form-label" %><%= form.text_field :share, class: "form-control", required: true, placeholder: "TestModels", maxlength: 80 %><div class="form-text">For \\SAMMYPC\TestModels enter TestModels here.</div></div>
+          <div class="col-md-6 mb-3"><%= form.label :username, "Username", class: "form-label" %><%= form.text_field :username, class: "form-control", required: true, autocomplete: "username", maxlength: 128 %></div>
+          <div class="col-md-6 mb-3"><%= form.label :password, "Password", class: "form-label" %><%= form.password_field :password, value: nil, class: "form-control", required: true, autocomplete: "new-password", maxlength: 1024 %><div class="form-text">Use the account password, not a Windows Hello PIN.</div></div>
+          <div class="col-md-6 mb-3"><%= form.label :domain, "Domain / PC name (optional)", class: "form-label" %><%= form.text_field :domain, class: "form-control", placeholder: "SAMMYPC", maxlength: 128 %></div>
+          <div class="col-md-6 mb-3"><%= form.label :smb_version, "SMB version", class: "form-label" %><%= form.select :smb_version, [["Auto (SMB 2.1 or newer)", "auto"], ["3.1.1", "3.1.1"], ["3.0", "3.0"], ["2.1", "2.1"]], {}, class: "form-select" %></div>
+        </div>
+      <% elsif selected == "azure" %>
+        <div class="alert alert-secondary">The existing production Azure accounts remain frozen. Use a separate test account.</div>
+        <div class="row">
+          <div class="col-md-6 mb-3"><%= form.label :account_name, "Storage account", class: "form-label" %><%= form.text_field :account_name, class: "form-control", required: true, maxlength: 24 %></div>
+          <div class="col-md-6 mb-3"><%= form.label :container_name, "Container", class: "form-label" %><%= form.text_field :container_name, class: "form-control", required: true, maxlength: 63 %></div>
+        </div>
+        <div class="mb-3"><%= form.label :account_key, "Account access key", class: "form-label" %><%= form.password_field :account_key, value: nil, class: "form-control", required: true, autocomplete: "new-password", maxlength: 256 %><div class="form-text">Account key only. SAS and managed identity are not available in this release.</div></div>
+      <% else %>
+        <p class="text-muted">The source will use <code>/storage-sources/local/&lt;mount-name&gt;</code>. Test &amp; Create makes an empty folder if it does not exist. An existing folder is used with its current permissions.</p>
+      <% end %>
+      <% unless selected == "local" %>
+        <div class="form-check mb-3"><%= form.check_box :read_only, class: "form-check-input" %><%= form.label :read_only, "Read-only source", class: "form-check-label" %></div>
+        <p class="small text-muted">Writable connection tests create and remove a temporary probe file. Manyfold requires writable storage when registering a library.</p>
+      <% end %>
+      <hr class="my-4">
+      <div class="d-flex flex-wrap gap-2">
+        <%= button_tag "Test Connection", name: :storage_operation, value: "test", class: "btn btn-outline-primary btn-lg", type: :submit %>
+        <%= button_tag "Test & Create Source", name: :storage_operation, value: "create", class: "btn btn-primary btn-lg", type: :submit %>
+      </div>
+      <p class="small text-muted mt-3 mb-0">Follow progress under Storage Activity at the bottom of the Storage page. After creation, open Manage Source to register the library. No scan starts automatically.</p>
+    </div></div>
+  <% end %>
+</div>
+
+<%= javascript_include_tag "/makerlibrary/azure-files-import.js", defer: true, nonce: true %>

@@ -10,6 +10,15 @@ authenticate :user, lambda { |u| u.is_moderator? } do
           post :extend_membership
         end
       end
+
+      resources :invitations,
+        only: [:index, :create] do
+        member do
+          post :resend
+          delete :revoke
+        end
+      end
+
       resources :membership_plans,
         only: [
           :index,

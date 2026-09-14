@@ -79,9 +79,11 @@ RSpec.describe "/settings/invitations", :after_first_run, :multiuser do
     it "rotates and resends a pending invitation" do
       invitation =
         User.invite!(
-          email: "resend@example.com",
-          approved: true,
-          membership_status: "active"
+          {
+            email: "resend@example.com",
+            approved: true,
+            membership_status: "active"
+          }
         )
 
       original_token = invitation.invitation_token
@@ -97,9 +99,11 @@ RSpec.describe "/settings/invitations", :after_first_run, :multiuser do
     it "removes only the pending invited account" do
       invitation =
         User.invite!(
-          email: "revoke@example.com",
-          approved: true,
-          membership_status: "active"
+          {
+            email: "revoke@example.com",
+            approved: true,
+            membership_status: "active"
+          }
         )
 
       expect {

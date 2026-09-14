@@ -86,3 +86,10 @@ node_modules
 # Plugins folder
 /plugins/*
 !/plugins/.keep
+
+# MakerLibrary3D recovered-source artifacts
+*.bak-*
+*.before-*
+*.rb.v[0-9]*-*
+*.erb.v[0-9]*-*
+cfdfv

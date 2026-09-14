@@ -97,13 +97,16 @@ class Settings::InvitationsController < ApplicationController
 
     invitation =
       User.invite!(
-        email: email,
-        approved: true,
-        membership_status: "active",
-        membership_plan: plan,
-        membership_started_at: nil,
-        membership_expires_at: expires_at,
-        membership_admin_notes: params[:membership_admin_notes].to_s.strip
+        {
+          email: email,
+          approved: true,
+          membership_status: "active",
+          membership_plan: plan,
+          membership_started_at: nil,
+          membership_expires_at: expires_at,
+          membership_admin_notes: params[:membership_admin_notes].to_s.strip
+        },
+        current_user
       )
 
     if invitation.errors.any?

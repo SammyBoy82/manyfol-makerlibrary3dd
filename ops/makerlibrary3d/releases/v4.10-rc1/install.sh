@@ -190,6 +190,15 @@ docker run --rm --entrypoint ruby "$TARGET_IMAGE" -rerb -e '
   end
 '   /usr/src/app/app/views/settings/invitations/index.html.erb   /usr/src/app/app/views/settings/users/index.html.erb   /usr/src/app/app/views/layouts/settings.html.erb   /usr/src/app/app/views/devise/mailer/invitation_instructions.html.erb   /usr/src/app/app/views/devise/mailer/invitation_instructions.text.erb
 
+echo
+echo "========== ISOLATED REQUEST TEST =========="
+
+docker run --rm   --network none   -e RAILS_ENV=test   -e DATABASE_URL=sqlite3:/tmp/makerlibrary-v410-test.sqlite3   -e REDIS_URL=redis://127.0.0.1:1/15   --entrypoint sh   "$TARGET_IMAGE"   -lc '
+    bin/rails db:prepare >/tmp/makerlibrary-v410-db.log &&
+    bundle exec rspec spec/requests/settings/invitations_spec.rb
+  '
+echo "REQUEST_TEST_GATE=PASS"
+
 cat > "$OVERRIDE" <<YAML
 services:
   manyfold:
@@ -311,6 +320,7 @@ source_branch=$BRANCH
 container_status=$RUNTIME_STATUS
 storage_propagation=$RUNTIME_PROPAGATION
 invitation_runtime_gate=pass
+request_test_gate=pass
 http_gate=pass
 job_gate=pass
 source_sync=pass

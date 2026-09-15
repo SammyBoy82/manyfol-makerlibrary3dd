@@ -21,6 +21,7 @@ LOG="/tmp/MakerLibrary3D-v410-rc1-$STAMP.log"
 BUILD_CONTAINER="makerlibrary3d-v410-build-$STAMP"
 TEST_NETWORK="makerlibrary3d-v410-test-$STAMP"
 TEST_DB_CONTAINER="makerlibrary3d-v410-postgres-$STAMP"
+TEST_REDIS_CONTAINER="makerlibrary3d-v410-redis-$STAMP"
 TEST_DB_USER="makerlibrary_test"
 TEST_DB_NAME="makerlibrary_test"
 TEST_DB_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
@@ -73,6 +74,7 @@ rollback() {
 }
 
 cleanup_test_environment() {
+  docker rm -f "$TEST_REDIS_CONTAINER" >/dev/null 2>&1 || true
   docker rm -f "$TEST_DB_CONTAINER" >/dev/null 2>&1 || true
   docker network rm "$TEST_NETWORK" >/dev/null 2>&1 || true
 }
@@ -198,7 +200,7 @@ echo "========== STATIC VALIDATION =========="
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/controllers/settings/invitations_controller.rb
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/models/user.rb
 
-echo "RAILS_TEMPLATE_VALIDATION=REQUEST_SPEC"
+echo "RAILS_TEMPLATE_VALIDATION=INTEGRATION_SMOKE_TEST"
 
 echo
 echo "========== ISOLATED REQUEST TEST =========="
@@ -230,8 +232,28 @@ if [ -z "$PRODUCTION_DB_CONTAINER" ]; then
 fi
 [ -n "$PRODUCTION_DB_CONTAINER" ] || die "production PostgreSQL container could not be identified"
 
+PRODUCTION_REDIS_CONTAINER="$(
+  docker ps \
+    --filter "label=com.docker.compose.project=slforge" \
+    --filter "label=com.docker.compose.service=redis" \
+    --format '{{.Names}}' |
+    head -1
+)"
+
+if [ -z "$PRODUCTION_REDIS_CONTAINER" ]; then
+  PRODUCTION_REDIS_CONTAINER="$(
+    docker ps \
+      --filter "label=com.docker.compose.project=slforge" \
+      --format '{{.Names}}|{{.Image}}' |
+      awk -F '|' 'tolower($2) ~ /redis/ { print $1; exit }'
+  )"
+fi
+[ -n "$PRODUCTION_REDIS_CONTAINER" ] || die "production Redis container could not be identified"
+
 TEST_DB_IMAGE="$(docker inspect "$PRODUCTION_DB_CONTAINER" --format '{{.Config.Image}}')"
+TEST_REDIS_IMAGE="$(docker inspect "$PRODUCTION_REDIS_CONTAINER" --format '{{.Config.Image}}')"
 [ -n "$TEST_DB_IMAGE" ] || die "production PostgreSQL image could not be identified"
+[ -n "$TEST_REDIS_IMAGE" ] || die "production Redis image could not be identified"
 
 cleanup_test_environment
 docker network create --internal "$TEST_NETWORK" >/dev/null
@@ -243,6 +265,11 @@ docker run -d \
   -e POSTGRES_PASSWORD="$TEST_DB_PASSWORD" \
   -e POSTGRES_DB="$TEST_DB_NAME" \
   "$TEST_DB_IMAGE" >/dev/null
+
+docker run -d \
+  --name "$TEST_REDIS_CONTAINER" \
+  --network "$TEST_NETWORK" \
+  "$TEST_REDIS_IMAGE" >/dev/null
 
 TEST_DB_READY=0
 for attempt in $(seq 1 30); do
@@ -256,25 +283,173 @@ for attempt in $(seq 1 30); do
 done
 [ "$TEST_DB_READY" -eq 1 ] || die "disposable PostgreSQL test database did not become ready"
 
+TEST_REDIS_READY=0
+for attempt in $(seq 1 30); do
+  if docker exec "$TEST_REDIS_CONTAINER" redis-cli ping 2>/dev/null |
+       grep -qx PONG
+  then
+    TEST_REDIS_READY=1
+    break
+  fi
+  sleep 1
+done
+[ "$TEST_REDIS_READY" -eq 1 ] || die "disposable Redis test service did not become ready"
+
 TEST_DATABASE_URL="postgresql://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_CONTAINER:5432/$TEST_DB_NAME"
+TEST_REDIS_URL="redis://$TEST_REDIS_CONTAINER:6379/15"
+
+TEST_ENV=(
+  -e RAILS_ENV=test
+  -e APP_VERSION="$VERSION"
+  -e GIT_SHA="$HEAD_SHA"
+  -e MULTIUSER=enabled
+  -e DATABASE_ADAPTER=postgresql
+  -e DATABASE_URL="$TEST_DATABASE_URL"
+  -e REDIS_URL="$TEST_REDIS_URL"
+)
 
 docker run --rm \
   --network "$TEST_NETWORK" \
-  -e RAILS_ENV=test \
-  -e APP_VERSION="$VERSION" \
-  -e GIT_SHA="$HEAD_SHA" \
-  -e DATABASE_ADAPTER=postgresql \
-  -e DATABASE_URL="$TEST_DATABASE_URL" \
-  -e REDIS_URL=redis://127.0.0.1:1/15 \
+  "${TEST_ENV[@]}" \
   --entrypoint sh \
   "$TARGET_IMAGE" \
-  -lc '
-    bin/rails db:prepare &&
-    bundle exec rspec spec/requests/settings/invitations_spec.rb
-  '
+  -lc 'bin/rails db:prepare >/dev/null'
+echo "DATABASE_PREPARE_GATE=PASS"
+
+docker run --rm -i \
+  --network "$TEST_NETWORK" \
+  "${TEST_ENV[@]}" \
+  --entrypoint sh \
+  "$TARGET_IMAGE" \
+  -lc 'bin/rails runner -' <<'RUBY'
+require "action_dispatch/testing/integration"
+require "fileutils"
+require "securerandom"
+
+def assert_gate(condition, message)
+  raise "INTEGRATION_GATE_FAILED: #{message}" unless condition
+end
+
+library_path = "/tmp/makerlibrary-v410-smoke-library"
+FileUtils.mkdir_p(library_path)
+
+Library.create!(
+  name: "v4.10 Smoke Library",
+  path: library_path,
+  storage_service: "filesystem"
+)
+
+password = SecureRandom.base64(36)
+administrator = User.create!(
+  username: "v410_smoke_admin",
+  email: "v410-smoke-admin@example.invalid",
+  password: password,
+  password_confirmation: password,
+  approved: true,
+  membership_status: "active"
+)
+administrator.add_role(:administrator)
+assert_gate(administrator.is_administrator?, "administrator role was not assigned")
+
+plan = MembershipPlan.create!(
+  name: "v4.10 Smoke Plan",
+  description: "Disposable integration validation",
+  billing_interval: "month",
+  active: true,
+  all_libraries: true
+)
+
+session = ActionDispatch::Integration::Session.new(Rails.application)
+session.host! "example.com"
+
+session.post(
+  "/users/sign_in",
+  params: {
+    user: {
+      email: administrator.email,
+      password: password
+    }
+  }
+)
+assert_gate(session.response.redirect?, "administrator sign-in failed")
+
+session.get("/settings/invitations")
+assert_gate(session.response.status == 200, "invitation dashboard did not return HTTP 200")
+assert_gate(
+  session.response.body.include?("Membership Invitations"),
+  "invitation dashboard template did not render"
+)
+
+email = "v410-invited-member@example.invalid"
+session.post(
+  "/settings/invitations",
+  params: {
+    email: email,
+    membership_role: "contributor",
+    membership_plan_id: plan.id,
+    membership_admin_notes: "Disposable integration validation"
+  }
+)
+assert_gate(session.response.redirect?, "invitation creation did not redirect")
+
+invitation = User.find_by(email: email)
+assert_gate(invitation.present?, "invited user was not created")
+assert_gate(invitation.invitation_token.present?, "invitation token was not created")
+assert_gate(invitation.membership_plan_id == plan.id, "membership plan was not assigned")
+assert_gate(invitation.has_role?(:member), "member role was not assigned")
+assert_gate(invitation.has_role?(:contributor), "contributor role was not assigned")
+
+user_count = User.count
+session.post(
+  "/settings/invitations",
+  params: {
+    email: email.upcase,
+    membership_role: "member"
+  }
+)
+assert_gate(User.count == user_count, "duplicate invitation was created")
+
+original_token = invitation.invitation_token
+session.post("/settings/invitations/#{invitation.id}/resend")
+assert_gate(session.response.redirect?, "invitation resend did not redirect")
+assert_gate(
+  invitation.reload.invitation_token != original_token,
+  "invitation resend did not rotate the token"
+)
+
+session.delete("/settings/invitations/#{invitation.id}/revoke")
+assert_gate(session.response.redirect?, "invitation revoke did not redirect")
+assert_gate(!User.exists?(invitation.id), "revoked invitation still exists")
+
+audit_actions = AdminAuditEvent.where(
+  action: [
+    "membership_invitation_created",
+    "membership_invitation_resent",
+    "membership_invitation_revoked"
+  ]
+).distinct.pluck(:action)
+
+assert_gate(
+  audit_actions.sort == [
+    "membership_invitation_created",
+    "membership_invitation_resent",
+    "membership_invitation_revoked"
+  ].sort,
+  "invitation audit events are incomplete"
+)
+
+puts "INVITATION_DASHBOARD_RENDER_GATE=PASS"
+puts "INVITATION_CREATE_GATE=PASS"
+puts "INVITATION_DUPLICATE_GATE=PASS"
+puts "INVITATION_RESEND_GATE=PASS"
+puts "INVITATION_REVOKE_GATE=PASS"
+puts "INVITATION_AUDIT_GATE=PASS"
+puts "INTEGRATION_SMOKE_TEST_GATE=PASS"
+RUBY
 
 cleanup_test_environment
 echo "REQUEST_TEST_DATABASE=DISPOSABLE_POSTGRESQL"
+echo "REQUEST_TEST_REDIS=DISPOSABLE_REDIS"
 echo "REQUEST_TEST_GATE=PASS"
 
 cat > "$OVERRIDE" <<YAML

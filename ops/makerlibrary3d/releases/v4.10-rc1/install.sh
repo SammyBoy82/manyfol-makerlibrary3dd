@@ -261,6 +261,8 @@ TEST_DATABASE_URL="postgresql://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_CONTAIN
 docker run --rm \
   --network "$TEST_NETWORK" \
   -e RAILS_ENV=test \
+  -e APP_VERSION="$VERSION" \
+  -e GIT_SHA="$HEAD_SHA" \
   -e DATABASE_ADAPTER=postgresql \
   -e DATABASE_URL="$TEST_DATABASE_URL" \
   -e REDIS_URL=redis://127.0.0.1:1/15 \

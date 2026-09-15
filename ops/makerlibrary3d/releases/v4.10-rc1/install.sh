@@ -87,6 +87,7 @@ failed() {
   exit "$rc"
 }
 trap 'failed $LINENO' ERR
+trap cleanup_test_environment EXIT
 
 [ "$(id -u)" -eq 0 ] || die "run with sudo"
 for command in docker git rsync curl python3; do
@@ -207,16 +208,27 @@ DATABASE_SERVICE="$(
     sed -n 's/^DATABASE_HOST=//p' |
     head -1
 )"
-[ -n "$DATABASE_SERVICE" ] || die "production database service could not be identified"
 
-PRODUCTION_DB_CONTAINER="$(
-  docker ps \
-    --filter "label=com.docker.compose.project=slforge" \
-    --filter "label=com.docker.compose.service=$DATABASE_SERVICE" \
-    --format '{{.Names}}' |
-    head -1
-)"
-[ -n "$PRODUCTION_DB_CONTAINER" ] || die "production database container could not be identified"
+PRODUCTION_DB_CONTAINER=""
+if [ -n "$DATABASE_SERVICE" ]; then
+  PRODUCTION_DB_CONTAINER="$(
+    docker ps \
+      --filter "label=com.docker.compose.project=slforge" \
+      --filter "label=com.docker.compose.service=$DATABASE_SERVICE" \
+      --format '{{.Names}}' |
+      head -1
+  )"
+fi
+
+if [ -z "$PRODUCTION_DB_CONTAINER" ]; then
+  PRODUCTION_DB_CONTAINER="$(
+    docker ps \
+      --filter "label=com.docker.compose.project=slforge" \
+      --format '{{.Names}}|{{.Image}}' |
+      awk -F '|' 'tolower($2) ~ /postgres/ { print $1; exit }'
+  )"
+fi
+[ -n "$PRODUCTION_DB_CONTAINER" ] || die "production PostgreSQL container could not be identified"
 
 TEST_DB_IMAGE="$(docker inspect "$PRODUCTION_DB_CONTAINER" --format '{{.Config.Image}}')"
 [ -n "$TEST_DB_IMAGE" ] || die "production PostgreSQL image could not be identified"

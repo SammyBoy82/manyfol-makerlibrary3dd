@@ -1,0 +1,253 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h3 class="mb-1">Membership Invitations</h3>
+    <p class="text-muted mb-0">
+      Invite members, pre-assign access, and manage pending invitation links.
+    </p>
+  </div>
+
+  <%= link_to "Back to Members",
+        settings_users_path,
+        class: "btn btn-outline-secondary" %>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100 border-primary">
+      <div class="card-body">
+        <div class="text-muted small">Pending</div>
+        <div class="display-6"><%= @pending_count %></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100 border-warning">
+      <div class="card-body">
+        <div class="text-muted small">Expired</div>
+        <div class="display-6"><%= @expired_count %></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100 border-success">
+      <div class="card-body">
+        <div class="text-muted small">Accepted</div>
+        <div class="display-6"><%= @accepted_count %></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    <strong>Invite a member</strong>
+  </div>
+
+  <div class="card-body">
+    <% unless @email_configured %>
+      <div class="alert alert-warning">
+        Email delivery is not configured. Invitations cannot be sent until SMTP is available.
+      </div>
+    <% end %>
+
+    <%= form_with url: settings_invitations_path,
+          method: :post,
+          class: "row g-3" do |form| %>
+      <div class="col-md-6">
+        <%= label_tag :email, "Email address", class: "form-label" %>
+        <%= email_field_tag :email,
+              params[:email],
+              required: true,
+              autocomplete: "email",
+              class: "form-control",
+              placeholder: "member@example.com" %>
+      </div>
+
+      <div class="col-md-3">
+        <%= label_tag :membership_role, "Role", class: "form-label" %>
+        <%= select_tag :membership_role,
+              options_for_select(
+                [
+                  ["Member", "member"],
+                  ["Contributor", "contributor"],
+                  ["Moderator", "moderator"],
+                  ["Administrator", "administrator"]
+                ],
+                "member"
+              ),
+              class: "form-select" %>
+      </div>
+
+      <div class="col-md-3">
+        <%= label_tag :membership_plan_id, "Membership plan", class: "form-label" %>
+        <%= select_tag :membership_plan_id,
+              options_from_collection_for_select(@plans, :id, :name),
+              include_blank: "No membership plan",
+              class: "form-select" %>
+      </div>
+
+      <div class="col-md-4">
+        <%= label_tag :membership_expires_at,
+              "Membership expiry",
+              class: "form-label" %>
+        <%= datetime_local_field_tag :membership_expires_at,
+              nil,
+              class: "form-control" %>
+        <div class="form-text">Optional. The invitation link itself expires after 14 days.</div>
+      </div>
+
+      <div class="col-md-8">
+        <%= label_tag :membership_admin_notes,
+              "Private administrator notes",
+              class: "form-label" %>
+        <%= text_area_tag :membership_admin_notes,
+              nil,
+              rows: 2,
+              class: "form-control",
+              placeholder: "Reason, customer reference, or internal notes…" %>
+      </div>
+
+      <div class="col-12">
+        <%= form.submit "Send Secure Invitation",
+              class: "btn btn-primary",
+              disabled: !@email_configured %>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Pending invitations</strong>
+    <span class="badge bg-secondary"><%= @pending_count %></span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Recipient</th>
+          <th>Access</th>
+          <th>Sent</th>
+          <th>Invitation status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @pending_invitations.each do |invitation| %>
+          <% due_at = invitation.invitation_due_at %>
+          <% expired = due_at.present? && due_at <= Time.current %>
+          <tr>
+            <td>
+              <div class="fw-semibold"><%= invitation.email %></div>
+              <% if invitation.membership_admin_notes.present? %>
+                <div class="small text-muted">
+                  <%= truncate(invitation.membership_admin_notes, length: 90) %>
+                </div>
+              <% end %>
+            </td>
+            <td>
+              <% invitation.roles.sort_by(&:name).each do |role| %>
+                <span class="badge bg-secondary me-1"><%= role.name.humanize %></span>
+              <% end %>
+              <div class="small text-muted mt-1">
+                <%= invitation.membership_plan&.name || "No membership plan" %>
+              </div>
+            </td>
+            <td>
+              <%= invitation.invitation_sent_at&.in_time_zone&.strftime("%Y-%m-%d %H:%M") || "—" %>
+            </td>
+            <td>
+              <% if expired %>
+                <span class="badge bg-danger">Expired</span>
+              <% else %>
+                <span class="badge bg-warning text-dark">Awaiting acceptance</span>
+              <% end %>
+              <div class="small text-muted mt-1">
+                <% if due_at %>
+                  Expires <%= due_at.in_time_zone.strftime("%Y-%m-%d %H:%M") %>
+                <% else %>
+                  No link expiry
+                <% end %>
+              </div>
+            </td>
+            <td class="text-end">
+              <div class="d-inline-flex gap-2">
+                <%= button_to(expired ? "Send New Link" : "Resend",
+                      resend_settings_invitation_path(invitation),
+                      method: :post,
+                      class: "btn btn-sm btn-outline-primary") %>
+
+                <%= button_to "Revoke",
+                      revoke_settings_invitation_path(invitation),
+                      method: :delete,
+                      class: "btn btn-sm btn-outline-danger",
+                      form: {
+                        data: {
+                          turbo_confirm: "Revoke this invitation? The pending account will be removed."
+                        }
+                      } %>
+              </div>
+            </td>
+          </tr>
+        <% end %>
+
+        <% if @pending_invitations.empty? %>
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4">
+              No pending invitations.
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <strong>Recently accepted</strong>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Plan</th>
+          <th>Accepted</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @accepted_invitations.each do |invitation| %>
+          <tr>
+            <td>
+              <div class="fw-semibold"><%= invitation.username %></div>
+              <div class="small text-muted"><%= invitation.email %></div>
+            </td>
+            <td><%= invitation.membership_plan&.name || "No membership plan" %></td>
+            <td>
+              <%= invitation.invitation_accepted_at&.in_time_zone&.strftime("%Y-%m-%d %H:%M") %>
+            </td>
+            <td class="text-end">
+              <%= link_to "View Member",
+                    settings_user_path(invitation),
+                    class: "btn btn-sm btn-outline-secondary" %>
+            </td>
+          </tr>
+        <% end %>
+
+        <% if @accepted_invitations.empty? %>
+          <tr>
+            <td colspan="4" class="text-center text-muted py-4">
+              No accepted invitations yet.
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

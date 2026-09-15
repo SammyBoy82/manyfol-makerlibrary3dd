@@ -9,9 +9,17 @@
   </div>
 
   <% if policy(:user).new? %>
-    <%= link_to "Add Member",
-          new_settings_user_path,
-          class: "btn btn-primary" %>
+    <div class="d-flex gap-2">
+      <% if current_user&.is_administrator? %>
+        <%= link_to "Invite Member",
+              settings_invitations_path,
+              class: "btn btn-primary" %>
+      <% end %>
+
+      <%= link_to "Create Member Manually",
+            new_settings_user_path,
+            class: "btn btn-outline-secondary" %>
+    </div>
   <% end %>
 
 </div>

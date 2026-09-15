@@ -112,6 +112,8 @@ class User < ApplicationRecord
 
   attr_writer :skip_invitation
 
+  after_invitation_accepted :activate_invited_membership
+
   scope :active, -> { where(invitation_token: nil) }
   scope :invited, -> { where.not(invitation_token: nil) }
 
@@ -330,10 +332,10 @@ class User < ApplicationRecord
     end
   end
 
-  def self.invite!(params)
-    options = params
-    options[:username] ||= "invite_#{SecureRandom.hex(8)}"
-    super(options)
+  def self.invite!(params, invited_by = nil, options = {})
+    attributes = params.to_h.symbolize_keys
+    attributes[:username] ||= "invite_#{SecureRandom.hex(8)}"
+    super(attributes, invited_by, options)
   end
 
   def liked_list
@@ -347,6 +349,44 @@ class User < ApplicationRecord
   memo_wise :liked?
 
   private
+
+  def activate_invited_membership
+    updates = {}
+
+    updates[:approved] = true unless approved?
+
+    if has_attribute?(:membership_status) &&
+        membership_status != "active"
+      updates[:membership_status] = "active"
+    end
+
+    if has_attribute?(:membership_started_at) &&
+        membership_started_at.blank?
+      updates[:membership_started_at] = Time.current
+    end
+
+    if updates.any?
+      update_columns(
+        updates.merge(updated_at: Time.current)
+      )
+    end
+
+    AdminAudit.record(
+      actor: self,
+      action: "membership_invitation_accepted",
+      target: self,
+      after_data: {
+        username: username,
+        roles: roles.pluck(:name).sort,
+        membership_plan_id: membership_plan_id,
+        membership_plan: membership_plan&.name,
+        membership_status: membership_status,
+        membership_started_at: membership_started_at&.iso8601,
+        membership_expires_at: membership_expires_at&.iso8601,
+        invitation_accepted_at: invitation_accepted_at&.iso8601
+      }
+    )
+  end
 
   def set_quota
     attributes["quota"] = SiteSettings.default_user_quota if try(:quota_use_site_default)

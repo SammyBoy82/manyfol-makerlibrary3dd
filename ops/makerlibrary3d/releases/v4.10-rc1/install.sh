@@ -355,6 +355,26 @@ fi
 echo "vite_output_dir=$TEST_VITE_OUTPUT_DIR"
 echo "VITE_PRODUCTION_MANIFEST_GATE=PASS"
 
+# Writable scratch space belongs only to each disposable test container.
+# Never mount over app/views or other code: the UID code-access gate stays real.
+TEST_WRITABLE=(
+  --tmpfs /usr/src/app/tmp:rw,nosuid,nodev,uid=1500,gid=1500,mode=0700,size=256m
+  --tmpfs /usr/src/app/log:rw,nosuid,nodev,uid=1500,gid=1500,mode=0700,size=32m
+  -e HOME=/tmp
+)
+
+docker run --rm --network none --user 1500:1500 \
+  "${TEST_WRITABLE[@]}" --entrypoint ruby "$TARGET_IMAGE" -e '
+    abort "Wrong runtime identity" unless Process.uid == 1500 && Process.gid == 1500
+    ["/usr/src/app/tmp", "/usr/src/app/log"].each do |directory|
+      path = File.join(directory, ".write-probe")
+      File.write(path, "probe")
+      abort "Scratch readback failed" unless File.read(path) == "probe"
+      File.unlink(path)
+    end
+    puts "TEST_WRITABLE_DIRECTORIES_GATE=PASS"
+  '
+
 TEST_ENV=(
   -e RAILS_ENV=test
   -e APP_VERSION="$VERSION"
@@ -371,6 +391,7 @@ TEST_ENV=(
 docker run --rm --user 1500:1500 \
   --network "$TEST_NETWORK" \
   "${TEST_ENV[@]}" \
+  "${TEST_WRITABLE[@]}" \
   --entrypoint sh \
   "$TARGET_IMAGE" \
   -lc 'bin/rails db:prepare >/dev/null'
@@ -379,6 +400,7 @@ echo "DATABASE_PREPARE_GATE=PASS"
 docker run --rm -i --user 1500:1500 \
   --network "$TEST_NETWORK" \
   "${TEST_ENV[@]}" \
+  "${TEST_WRITABLE[@]}" \
   --entrypoint sh \
   "$TARGET_IMAGE" \
   -lc 'bin/rails runner -' <<'RUBY'

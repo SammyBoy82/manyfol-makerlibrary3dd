@@ -186,13 +186,7 @@ echo "========== STATIC VALIDATION =========="
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/controllers/settings/invitations_controller.rb
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/models/user.rb
 
-docker run --rm --entrypoint bundle "$TARGET_IMAGE" exec ruby -rerubi -e '
-  ARGV.each do |path|
-    source = Erubi::Engine.new(File.binread(path)).src
-    RubyVM::InstructionSequence.compile(source, path)
-    puts "ERB_SYNTAX_OK=#{path}"
-  end
-'   /usr/src/app/app/views/settings/invitations/index.html.erb   /usr/src/app/app/views/settings/users/index.html.erb   /usr/src/app/app/views/layouts/settings.html.erb   /usr/src/app/app/views/devise/mailer/invitation_instructions.html.erb   /usr/src/app/app/views/devise/mailer/invitation_instructions.text.erb
+echo "RAILS_TEMPLATE_VALIDATION=REQUEST_SPEC"
 
 echo
 echo "========== ISOLATED REQUEST TEST =========="

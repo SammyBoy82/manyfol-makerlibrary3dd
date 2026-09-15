@@ -299,26 +299,41 @@ done
 TEST_DATABASE_URL="postgresql://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_CONTAINER:5432/$TEST_DB_NAME"
 TEST_REDIS_URL="redis://$TEST_REDIS_CONTAINER:6379/15"
 
+TEST_VITE_OUTPUT_DIR="$(
+  docker run --rm \
+    --entrypoint sh \
+    "$TARGET_IMAGE" \
+    -lc '
+      for directory in \
+        /usr/src/app/public/vite \
+        /usr/src/app/public/vite-*
+      do
+        if [ -s "$directory/.vite/manifest.json" ] ||
+           [ -s "$directory/manifest.json" ]
+        then
+          basename "$directory"
+          exit 0
+        fi
+      done
+      exit 1
+    '
+)"
+[ -n "$TEST_VITE_OUTPUT_DIR" ] || die "packaged Vite manifest could not be identified"
+echo "vite_output_dir=$TEST_VITE_OUTPUT_DIR"
+echo "VITE_PRODUCTION_MANIFEST_GATE=PASS"
+
 TEST_ENV=(
   -e RAILS_ENV=test
   -e APP_VERSION="$VERSION"
   -e GIT_SHA="$HEAD_SHA"
   -e MULTIUSER=enabled
+  -e PUBLIC_HOSTNAME=example.com
   -e VITE_RUBY_AUTO_BUILD=false
-  -e VITE_RUBY_PUBLIC_OUTPUT_DIR=vite
+  -e VITE_RUBY_PUBLIC_OUTPUT_DIR="$TEST_VITE_OUTPUT_DIR"
   -e DATABASE_ADAPTER=postgresql
   -e DATABASE_URL="$TEST_DATABASE_URL"
   -e REDIS_URL="$TEST_REDIS_URL"
 )
-
-docker run --rm \
-  --entrypoint sh \
-  "$TARGET_IMAGE" \
-  -lc '
-    test -s /usr/src/app/public/vite/.vite/manifest.json ||
-      test -s /usr/src/app/public/vite/manifest.json
-  '
-echo "VITE_PRODUCTION_MANIFEST_GATE=PASS"
 
 docker run --rm \
   --network "$TEST_NETWORK" \

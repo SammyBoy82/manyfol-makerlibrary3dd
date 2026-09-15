@@ -19,6 +19,11 @@ OVERRIDE="$STACK/docker-compose.storage-v4.10-rc1.yml"
 REPORT="/tmp/MakerLibrary3D-v4.10-rc1-result-$STAMP.txt"
 LOG="/tmp/MakerLibrary3D-v410-rc1-$STAMP.log"
 BUILD_CONTAINER="makerlibrary3d-v410-build-$STAMP"
+TEST_NETWORK="makerlibrary3d-v410-test-$STAMP"
+TEST_DB_CONTAINER="makerlibrary3d-v410-postgres-$STAMP"
+TEST_DB_USER="makerlibrary_test"
+TEST_DB_NAME="makerlibrary_test"
+TEST_DB_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
 DEPLOYED=0
 
 RUNTIME_FILES=(
@@ -67,8 +72,14 @@ rollback() {
   fi
 }
 
+cleanup_test_environment() {
+  docker rm -f "$TEST_DB_CONTAINER" >/dev/null 2>&1 || true
+  docker network rm "$TEST_NETWORK" >/dev/null 2>&1 || true
+}
+
 failed() {
   rc=$?
+  cleanup_test_environment
   echo "FAILED at line $1 (exit $rc)"
   [ "$DEPLOYED" -eq 0 ] || rollback
   echo "LOG=$LOG"
@@ -191,10 +202,65 @@ echo "RAILS_TEMPLATE_VALIDATION=REQUEST_SPEC"
 echo
 echo "========== ISOLATED REQUEST TEST =========="
 
-docker run --rm   --network none   -e RAILS_ENV=test   -e DATABASE_URL=sqlite3:/tmp/makerlibrary-v410-test.sqlite3   -e REDIS_URL=redis://127.0.0.1:1/15   --entrypoint sh   "$TARGET_IMAGE"   -lc '
-    bin/rails db:prepare >/tmp/makerlibrary-v410-db.log &&
+DATABASE_SERVICE="$(
+  docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' |
+    sed -n 's/^DATABASE_HOST=//p' |
+    head -1
+)"
+[ -n "$DATABASE_SERVICE" ] || die "production database service could not be identified"
+
+PRODUCTION_DB_CONTAINER="$(
+  docker ps \
+    --filter "label=com.docker.compose.project=slforge" \
+    --filter "label=com.docker.compose.service=$DATABASE_SERVICE" \
+    --format '{{.Names}}' |
+    head -1
+)"
+[ -n "$PRODUCTION_DB_CONTAINER" ] || die "production database container could not be identified"
+
+TEST_DB_IMAGE="$(docker inspect "$PRODUCTION_DB_CONTAINER" --format '{{.Config.Image}}')"
+[ -n "$TEST_DB_IMAGE" ] || die "production PostgreSQL image could not be identified"
+
+cleanup_test_environment
+docker network create --internal "$TEST_NETWORK" >/dev/null
+
+docker run -d \
+  --name "$TEST_DB_CONTAINER" \
+  --network "$TEST_NETWORK" \
+  -e POSTGRES_USER="$TEST_DB_USER" \
+  -e POSTGRES_PASSWORD="$TEST_DB_PASSWORD" \
+  -e POSTGRES_DB="$TEST_DB_NAME" \
+  "$TEST_DB_IMAGE" >/dev/null
+
+TEST_DB_READY=0
+for attempt in $(seq 1 30); do
+  if docker exec "$TEST_DB_CONTAINER" \
+       pg_isready -U "$TEST_DB_USER" -d "$TEST_DB_NAME" >/dev/null 2>&1
+  then
+    TEST_DB_READY=1
+    break
+  fi
+  sleep 2
+done
+[ "$TEST_DB_READY" -eq 1 ] || die "disposable PostgreSQL test database did not become ready"
+
+TEST_DATABASE_URL="postgresql://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_CONTAINER:5432/$TEST_DB_NAME"
+
+docker run --rm \
+  --network "$TEST_NETWORK" \
+  -e RAILS_ENV=test \
+  -e DATABASE_ADAPTER=postgresql \
+  -e DATABASE_URL="$TEST_DATABASE_URL" \
+  -e REDIS_URL=redis://127.0.0.1:1/15 \
+  --entrypoint sh \
+  "$TARGET_IMAGE" \
+  -lc '
+    bin/rails db:prepare &&
     bundle exec rspec spec/requests/settings/invitations_spec.rb
   '
+
+cleanup_test_environment
+echo "REQUEST_TEST_DATABASE=DISPOSABLE_POSTGRESQL"
 echo "REQUEST_TEST_GATE=PASS"
 
 cat > "$OVERRIDE" <<YAML

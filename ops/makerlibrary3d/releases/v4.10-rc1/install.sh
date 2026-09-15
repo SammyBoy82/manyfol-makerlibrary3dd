@@ -156,26 +156,29 @@ echo
 echo "========== BUILD CANDIDATE IMAGE =========="
 
 if docker image inspect "$TARGET_IMAGE" >/dev/null 2>&1; then
-  IMAGE_COMMIT="$(docker image inspect "$TARGET_IMAGE" --format '{{index .Config.Labels "com.slforge.source_commit"}}')"
-  [ "$IMAGE_COMMIT" = "$HEAD_SHA" ] || die "the target image exists from a different commit"
-  echo "REUSING_IMAGE=$TARGET_IMAGE"
-else
-  docker create --name "$BUILD_CONTAINER" "$BASE_IMAGE" >/dev/null
-
-  for path in "${RUNTIME_FILES[@]}"; do
-    if [ "$path" = "app/views/settings/invitations/index.html.erb" ]; then
-      docker cp "$CHECKOUT/app/views/settings/invitations"         "$BUILD_CONTAINER:/usr/src/app/app/views/settings/"
-    else
-      docker cp "$CHECKOUT/$path"         "$BUILD_CONTAINER:/usr/src/app/$path"
-    fi
-  done
-
-  docker cp "$CHECKOUT/spec/requests/settings/invitations_spec.rb"     "$BUILD_CONTAINER:/usr/src/app/spec/requests/settings/invitations_spec.rb"
-
-  docker commit     --change "LABEL com.slforge.version=$VERSION"     --change "LABEL com.slforge.source_commit=$HEAD_SHA"     --change "LABEL com.slforge.source_branch=$BRANCH"     "$BUILD_CONTAINER" "$TARGET_IMAGE" >/dev/null
-
-  docker rm "$BUILD_CONTAINER" >/dev/null
+  echo "Removing stale unpublished candidate image..."
+  docker image rm "$TARGET_IMAGE" >/dev/null
 fi
+
+docker create --name "$BUILD_CONTAINER" "$BASE_IMAGE" >/dev/null
+
+for path in "${RUNTIME_FILES[@]}"; do
+  if [ "$path" = "app/views/settings/invitations/index.html.erb" ]; then
+    docker cp "$CHECKOUT/app/views/settings/invitations" "$BUILD_CONTAINER:/usr/src/app/app/views/settings/"
+  else
+    docker cp "$CHECKOUT/$path" "$BUILD_CONTAINER:/usr/src/app/$path"
+  fi
+done
+
+docker cp "$CHECKOUT/spec/requests/settings/invitations_spec.rb" "$BUILD_CONTAINER:/usr/src/app/spec/requests/settings/invitations_spec.rb"
+
+docker commit \
+  --change "LABEL com.slforge.version=$VERSION" \
+  --change "LABEL com.slforge.source_commit=$HEAD_SHA" \
+  --change "LABEL com.slforge.source_branch=$BRANCH" \
+  "$BUILD_CONTAINER" "$TARGET_IMAGE" >/dev/null
+
+docker rm "$BUILD_CONTAINER" >/dev/null
 
 echo
 echo "========== STATIC VALIDATION =========="
@@ -183,9 +186,10 @@ echo "========== STATIC VALIDATION =========="
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/controllers/settings/invitations_controller.rb
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/models/user.rb
 
-docker run --rm --entrypoint ruby "$TARGET_IMAGE" -rerb -e '
+docker run --rm --entrypoint ruby "$TARGET_IMAGE" -rerubi -e '
   ARGV.each do |path|
-    RubyVM::InstructionSequence.compile(ERB.new(File.binread(path)).src, path)
+    source = Erubi::Engine.new(File.binread(path)).src
+    RubyVM::InstructionSequence.compile(source, path)
     puts "ERB_SYNTAX_OK=#{path}"
   end
 '   /usr/src/app/app/views/settings/invitations/index.html.erb   /usr/src/app/app/views/settings/users/index.html.erb   /usr/src/app/app/views/layouts/settings.html.erb   /usr/src/app/app/views/devise/mailer/invitation_instructions.html.erb   /usr/src/app/app/views/devise/mailer/invitation_instructions.text.erb

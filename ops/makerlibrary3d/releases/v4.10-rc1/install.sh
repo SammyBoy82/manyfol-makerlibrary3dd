@@ -299,7 +299,7 @@ done
 TEST_DATABASE_URL="postgresql://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_CONTAINER:5432/$TEST_DB_NAME"
 TEST_REDIS_URL="redis://$TEST_REDIS_CONTAINER:6379/15"
 
-TEST_VITE_OUTPUT_DIR="$(
+if ! TEST_VITE_OUTPUT_DIR="$(
   docker run --rm \
     --entrypoint sh \
     "$TARGET_IMAGE" \
@@ -318,7 +318,10 @@ TEST_VITE_OUTPUT_DIR="$(
       exit 1
     '
 )"
-[ -n "$TEST_VITE_OUTPUT_DIR" ] || die "packaged Vite manifest could not be identified"
+then
+  die "packaged Vite manifest could not be identified"
+fi
+[ -n "$TEST_VITE_OUTPUT_DIR" ] || die "packaged Vite manifest path was empty"
 echo "vite_output_dir=$TEST_VITE_OUTPUT_DIR"
 echo "VITE_PRODUCTION_MANIFEST_GATE=PASS"
 
@@ -369,7 +372,7 @@ Library.create!(
 password = SecureRandom.base64(36)
 administrator = User.create!(
   username: "v410_smoke_admin",
-  email: "v410-smoke-admin@example.invalid",
+  email: "v410-smoke-admin@example.com",
   password: password,
   password_confirmation: password,
   approved: true,
@@ -377,6 +380,10 @@ administrator = User.create!(
 )
 administrator.add_role(:administrator)
 assert_gate(administrator.is_administrator?, "administrator role was not assigned")
+assert_gate(
+  ActionMailer::Base.delivery_method.to_sym == :test,
+  "mailer is not using the isolated test delivery method"
+)
 
 plan = MembershipPlan.create!(
   name: "v4.10 Smoke Plan",
@@ -407,7 +414,7 @@ assert_gate(
   "invitation dashboard template did not render"
 )
 
-email = "v410-invited-member@example.invalid"
+email = "v410-invited-member@example.com"
 session.post(
   "/settings/invitations",
   params: {
@@ -422,6 +429,12 @@ assert_gate(session.response.redirect?, "invitation creation did not redirect")
 invitation = User.find_by(email: email)
 assert_gate(invitation.present?, "invited user was not created")
 assert_gate(invitation.invitation_token.present?, "invitation token was not created")
+assert_gate(invitation.invitation_sent_at.present?, "invitation sent timestamp was not recorded")
+assert_gate(invitation.invitation_due_at.present?, "invitation expiry was not calculated")
+assert_gate(
+  invitation.invitation_due_at.between?(13.days.from_now, 15.days.from_now),
+  "invitation expiry is not approximately 14 days"
+)
 assert_gate(invitation.membership_plan_id == plan.id, "membership plan was not assigned")
 assert_gate(invitation.has_role?(:member), "member role was not assigned")
 assert_gate(invitation.has_role?(:contributor), "contributor role was not assigned")
@@ -435,6 +448,16 @@ session.post(
   }
 )
 assert_gate(User.count == user_count, "duplicate invitation was created")
+
+invalid_role_count = User.count
+session.post(
+  "/settings/invitations",
+  params: {
+    email: "v410-invalid-role@example.com",
+    membership_role: "owner"
+  }
+)
+assert_gate(User.count == invalid_role_count, "unsupported role invitation was created")
 
 original_token = invitation.invitation_token
 session.post("/settings/invitations/#{invitation.id}/resend")
@@ -465,9 +488,12 @@ assert_gate(
   "invitation audit events are incomplete"
 )
 
+puts "MAIL_DELIVERY_ISOLATION_GATE=PASS"
 puts "INVITATION_DASHBOARD_RENDER_GATE=PASS"
 puts "INVITATION_CREATE_GATE=PASS"
 puts "INVITATION_DUPLICATE_GATE=PASS"
+puts "INVITATION_ROLE_VALIDATION_GATE=PASS"
+puts "INVITATION_EXPIRY_GATE=PASS"
 puts "INVITATION_RESEND_GATE=PASS"
 puts "INVITATION_REVOKE_GATE=PASS"
 puts "INVITATION_AUDIT_GATE=PASS"

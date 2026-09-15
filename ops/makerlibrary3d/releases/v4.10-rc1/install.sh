@@ -15,6 +15,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RELEASE="/srv/slforge/releases/makerlibrary3d-v4.10-rc1-$STAMP"
 CHECKOUT="$RELEASE/checkout"
 BACKUP="$RELEASE/backup"
+STAGED="$RELEASE/staged-code"
 OVERRIDE="$STACK/docker-compose.storage-v4.10-rc1.yml"
 REPORT="/tmp/MakerLibrary3D-v4.10-rc1-result-$STAMP.txt"
 LOG="/tmp/MakerLibrary3D-v410-rc1-$STAMP.log"
@@ -93,12 +94,12 @@ trap 'failed $LINENO' ERR
 trap cleanup_test_environment EXIT
 
 [ "$(id -u)" -eq 0 ] || die "run with sudo"
-for command in docker git rsync curl python3; do
+for command in docker git rsync curl python3 install; do
   command -v "$command" >/dev/null || die "missing command: $command"
 done
 
 echo "LOG=$LOG"
-echo "MakerLibrary3D v4.10-rc1 — one-go installer"
+echo "MakerLibrary3D v4.10-rc1 — UID 1500 packaging and integration gates"
 echo
 echo "========== PREFLIGHT =========="
 
@@ -170,6 +171,18 @@ PY
 echo
 echo "========== BUILD CANDIDATE IMAGE =========="
 
+# Keep checkout, backups and credentials private. Only allowlisted application
+# code is staged with public-read permissions for the runtime UID.
+echo "========== STAGE RUNTIME CODE =========="
+for path in "${SOURCE_FILES[@]}"; do
+  [ ! -L "$CHECKOUT/$path" ] || die "release file must not be a symlink: $path"
+  (umask 022; mkdir -p "$STAGED/$(dirname "$path")")
+  install -m 0644 "$CHECKOUT/$path" "$STAGED/$path"
+  cmp -s "$CHECKOUT/$path" "$STAGED/$path"
+done
+echo "CODE_STAGING_GATE=PASS"
+
+
 if docker image inspect "$TARGET_IMAGE" >/dev/null 2>&1; then
   echo "Removing stale unpublished candidate image..."
   docker image rm "$TARGET_IMAGE" >/dev/null
@@ -179,13 +192,13 @@ docker create --name "$BUILD_CONTAINER" "$BASE_IMAGE" >/dev/null
 
 for path in "${RUNTIME_FILES[@]}"; do
   if [ "$path" = "app/views/settings/invitations/index.html.erb" ]; then
-    docker cp "$CHECKOUT/app/views/settings/invitations" "$BUILD_CONTAINER:/usr/src/app/app/views/settings/"
+    docker cp "$STAGED/app/views/settings/invitations" "$BUILD_CONTAINER:/usr/src/app/app/views/settings/"
   else
-    docker cp "$CHECKOUT/$path" "$BUILD_CONTAINER:/usr/src/app/$path"
+    docker cp "$STAGED/$path" "$BUILD_CONTAINER:/usr/src/app/$path"
   fi
 done
 
-docker cp "$CHECKOUT/spec/requests/settings/invitations_spec.rb" "$BUILD_CONTAINER:/usr/src/app/spec/requests/settings/invitations_spec.rb"
+docker cp "$STAGED/spec/requests/settings/invitations_spec.rb" "$BUILD_CONTAINER:/usr/src/app/spec/requests/settings/invitations_spec.rb"
 
 docker commit \
   --change "LABEL com.slforge.version=$VERSION" \
@@ -198,8 +211,25 @@ docker rm "$BUILD_CONTAINER" >/dev/null
 echo
 echo "========== STATIC VALIDATION =========="
 
-docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/controllers/settings/invitations_controller.rb
-docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/models/user.rb
+docker run --rm --network none --user 1500:1500 \
+  --entrypoint ruby "$TARGET_IMAGE" -e '
+    abort "Wrong runtime identity" unless Process.uid == 1500 && Process.gid == 1500
+    ARGV.each do |relative|
+      path = File.join("/usr/src/app", relative)
+      File.open(path, "rb") { |file| file.read(1) }
+      directory = File.dirname(path)
+      loop do
+        Dir.children(directory)
+        break if directory == "/usr/src/app"
+        directory = File.dirname(directory)
+      end
+    end
+    puts "RUNTIME_CODE_ACCESS_GATE=PASS; UID=1500; GID=1500"
+  ' "${SOURCE_FILES[@]}"
+
+
+docker run --rm --user 1500:1500 --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/controllers/settings/invitations_controller.rb
+docker run --rm --user 1500:1500 --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/models/user.rb
 
 echo "RAILS_TEMPLATE_VALIDATION=INTEGRATION_SMOKE_TEST"
 
@@ -338,7 +368,7 @@ TEST_ENV=(
   -e REDIS_URL="$TEST_REDIS_URL"
 )
 
-docker run --rm \
+docker run --rm --user 1500:1500 \
   --network "$TEST_NETWORK" \
   "${TEST_ENV[@]}" \
   --entrypoint sh \
@@ -346,7 +376,7 @@ docker run --rm \
   -lc 'bin/rails db:prepare >/dev/null'
 echo "DATABASE_PREPARE_GATE=PASS"
 
-docker run --rm -i \
+docker run --rm -i --user 1500:1500 \
   --network "$TEST_NETWORK" \
   "${TEST_ENV[@]}" \
   --entrypoint sh \
@@ -359,6 +389,9 @@ require "securerandom"
 def assert_gate(condition, message)
   raise "INTEGRATION_GATE_FAILED: #{message}" unless condition
 end
+
+assert_gate(Process.uid == 1500 && Process.gid == 1500, "test must run as runtime UID/GID 1500")
+puts "INTEGRATION_RUNTIME_IDENTITY_GATE=PASS"
 
 library_path = "/tmp/makerlibrary-v410-smoke-library"
 FileUtils.mkdir_p(library_path)
@@ -611,10 +644,11 @@ echo
 echo "========== SYNC AUTHORITATIVE SOURCE =========="
 
 for path in "${SOURCE_FILES[@]}"; do
-  mkdir -p "$SOURCE/$(dirname "$path")"
-  rsync -a --checksum "$CHECKOUT/$path" "$SOURCE/$path"
+  (umask 022; mkdir -p "$SOURCE/$(dirname "$path")")
+  rsync -a --checksum "$STAGED/$path" "$SOURCE/$path"
   cmp -s "$CHECKOUT/$path" "$SOURCE/$path"
 done
+chmod 0755 "$SOURCE/app/views/settings/invitations"
 echo "SOURCE_SYNC_GATE=PASS"
 
 cat > "$REPORT" <<REPORT

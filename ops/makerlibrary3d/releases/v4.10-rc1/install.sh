@@ -74,6 +74,7 @@ rollback() {
 }
 
 cleanup_test_environment() {
+  docker rm -f "$BUILD_CONTAINER" >/dev/null 2>&1 || true
   docker rm -f "$TEST_REDIS_CONTAINER" >/dev/null 2>&1 || true
   docker rm -f "$TEST_DB_CONTAINER" >/dev/null 2>&1 || true
   docker network rm "$TEST_NETWORK" >/dev/null 2>&1 || true
@@ -303,10 +304,21 @@ TEST_ENV=(
   -e APP_VERSION="$VERSION"
   -e GIT_SHA="$HEAD_SHA"
   -e MULTIUSER=enabled
+  -e VITE_RUBY_AUTO_BUILD=false
+  -e VITE_RUBY_PUBLIC_OUTPUT_DIR=vite
   -e DATABASE_ADAPTER=postgresql
   -e DATABASE_URL="$TEST_DATABASE_URL"
   -e REDIS_URL="$TEST_REDIS_URL"
 )
+
+docker run --rm \
+  --entrypoint sh \
+  "$TARGET_IMAGE" \
+  -lc '
+    test -s /usr/src/app/public/vite/.vite/manifest.json ||
+      test -s /usr/src/app/public/vite/manifest.json
+  '
+echo "VITE_PRODUCTION_MANIFEST_GATE=PASS"
 
 docker run --rm \
   --network "$TEST_NETWORK" \
@@ -514,8 +526,8 @@ job_gate
 echo
 echo "========== DEPLOY RC1 =========="
 
-docker compose "${COMPOSE_ARGS[@]}" up -d --no-deps --force-recreate manyfold
 DEPLOYED=1
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-deps --force-recreate manyfold
 
 for attempt in $(seq 1 36); do
   if docker exec --user 1500:1500 "$CONTAINER"       bin/rails runner 'puts "RAILS_READY=true"' >/dev/null 2>&1

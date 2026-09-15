@@ -186,7 +186,7 @@ echo "========== STATIC VALIDATION =========="
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/controllers/settings/invitations_controller.rb
 docker run --rm --entrypoint ruby "$TARGET_IMAGE"   -c /usr/src/app/app/models/user.rb
 
-docker run --rm --entrypoint ruby "$TARGET_IMAGE" -rerubi -e '
+docker run --rm --entrypoint bundle "$TARGET_IMAGE" exec ruby -rerubi -e '
   ARGV.each do |path|
     source = Erubi::Engine.new(File.binread(path)).src
     RubyVM::InstructionSequence.compile(source, path)

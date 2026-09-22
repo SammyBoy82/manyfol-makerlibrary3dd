@@ -1,0 +1,220 @@
+<%= PageTitle title: "Preview Enrichment Review" %>
+
+<div class="mb-3">
+  <div class="d-flex flex-wrap gap-2">
+    <% %w[pending approved rejected failed imported].each do |status| %>
+      <% count = @counts[status] || 0 %>
+
+      <%= link_to(
+        "#{status.titleize} (#{count})",
+        settings_preview_enrichment_candidates_path(
+          status: status,
+          min_confidence: @min_confidence,
+          provider: @provider,
+          show_weak: params[:show_weak]
+        ),
+        class: "btn #{status == @status ? "btn-primary" : "btn-outline-secondary"} btn-sm"
+      ) %>
+    <% end %>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <%= form_with url: settings_preview_enrichment_candidates_path, method: :get, local: true do |form| %>
+      <%= hidden_field_tag :status, @status %>
+
+      <div class="row g-3 align-items-end">
+
+        <div class="col-md-3">
+          <%= label_tag :min_confidence, "Minimum confidence", class: "form-label" %>
+          <%= number_field_tag(
+            :min_confidence,
+            @min_confidence,
+            min: 0,
+            max: 100,
+            class: "form-control"
+          ) %>
+        </div>
+
+        <div class="col-md-3">
+          <%= label_tag :provider, "Provider", class: "form-label" %>
+
+          <%= select_tag(
+            :provider,
+            options_for_select(
+              [["All providers", ""]] + @providers.map { |p| [p.titleize, p] },
+              @provider
+            ),
+            class: "form-select"
+          ) %>
+        </div>
+
+        <div class="col-md-3">
+          <div class="form-check">
+            <%= check_box_tag(
+              :show_weak,
+              "1",
+              params[:show_weak] == "1",
+              class: "form-check-input"
+            ) %>
+
+            <%= label_tag(
+              :show_weak,
+              "Show weak matches below threshold",
+              class: "form-check-label"
+            ) %>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <%= submit_tag "Apply filters", class: "btn btn-primary" %>
+        </div>
+
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<% if @candidates.empty? %>
+
+  <div class="alert alert-info">
+    No preview enrichment candidates match the current filters.
+  </div>
+
+<% else %>
+
+  <div class="row g-3">
+
+    <% @candidates.each do |candidate| %>
+      <% metadata = candidate.metadata || {} %>
+
+      <div class="col-12 col-xl-6">
+        <div class="card h-100">
+
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+              <strong>
+                <%= link_to candidate.model.name, candidate.model %>
+              </strong>
+            </div>
+
+            <% confidence = candidate.confidence.to_i %>
+
+            <% badge_class =
+              if confidence >= 90
+                "text-bg-success"
+              elsif confidence >= 75
+                "text-bg-warning"
+              else
+                "text-bg-secondary"
+              end
+            %>
+
+            <span class="badge <%= badge_class %>">
+              <%= confidence %>%
+            </span>
+          </div>
+
+          <div class="card-body">
+
+            <div class="row g-3">
+
+              <div class="col-md-5">
+                <div class="border rounded overflow-hidden bg-body-secondary">
+                  <%= image_tag(
+                    image_settings_preview_enrichment_candidate_path(candidate),
+                    alt: candidate.model.name,
+                    loading: "lazy",
+                    referrerpolicy: "no-referrer",
+                    style: "width:100%;height:260px;object-fit:contain;"
+                  ) %>
+                </div>
+              </div>
+
+              <div class="col-md-7">
+
+                <dl class="row small mb-3">
+
+                  <dt class="col-4">Provider</dt>
+                  <dd class="col-8"><%= candidate.provider.presence || "Unknown" %></dd>
+
+                  <dt class="col-4">Creator</dt>
+                  <dd class="col-8">
+                    <%= metadata["creator"].presence ||
+                        metadata["user_name"].presence ||
+                        metadata["user_username"].presence ||
+                        "Unknown" %>
+                  </dd>
+
+                  <dt class="col-4">Confidence</dt>
+                  <dd class="col-8"><%= candidate.confidence || "Unknown" %></dd>
+
+                  <dt class="col-4">Match</dt>
+                  <dd class="col-8"><%= candidate.match_method.presence || "Unknown" %></dd>
+
+                  <dt class="col-4">Query</dt>
+                  <dd class="col-8 text-break"><%= candidate.search_query.presence || "—" %></dd>
+
+                  <dt class="col-4">Discovered</dt>
+                  <dd class="col-8"><%= candidate.discovered_at || candidate.created_at %></dd>
+
+                </dl>
+
+                <% if candidate.source_page_url.present? %>
+                  <div class="mb-3">
+                    <%= link_to(
+                      "View source",
+                      candidate.source_page_url,
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      class: "btn btn-outline-secondary btn-sm"
+                    ) %>
+                  </div>
+                <% end %>
+
+                <% if candidate.status == "pending" %>
+
+                  <div class="d-flex gap-2">
+
+                    <%= button_to(
+                      "Approve",
+                      approve_settings_preview_enrichment_candidate_path(candidate),
+                      method: :patch,
+                      class: "btn btn-success"
+                    ) %>
+
+                    <%= button_to(
+                      "Reject",
+                      reject_settings_preview_enrichment_candidate_path(candidate),
+                      method: :patch,
+                      class: "btn btn-outline-danger"
+                    ) %>
+
+                  </div>
+
+                <% else %>
+
+                  <span class="badge text-bg-secondary">
+                    <%= candidate.status.titleize %>
+                  </span>
+
+                <% end %>
+
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    <% end %>
+
+  </div>
+
+  <div class="mt-4">
+    <%= paginate @candidates %>
+  </div>
+
+<% end %>

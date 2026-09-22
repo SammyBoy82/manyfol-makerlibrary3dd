@@ -22,7 +22,9 @@
         </div>
       </div>
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 mb-4">
-        <%= render_component_collection Components::ModelCard, :model, @models %>
+        <div class="ml3d-model-grid">
+  <%= render_component_collection Components::ModelCard, :model, @models %>
+</div>
       </div>
       <%= paginate @models %>
       <% if @search %>

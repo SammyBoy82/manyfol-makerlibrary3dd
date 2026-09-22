@@ -1,6 +1,6 @@
 require "sidekiq/web"
 require "sidekiq/cron/web"
-require "fedipub"
+require "federails"
 
 Rails.application.routes.draw do
   draw(:auth)

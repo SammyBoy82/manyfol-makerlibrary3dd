@@ -36,6 +36,26 @@
         </li>
       <% end %>
     </ul>
+
+    <% if policy(:settings).index? && current_user&.is_administrator? %>
+      <hr>
+      <h5>MakerLibrary3D Admin</h5>
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <%= link_to "Operations Dashboard", admin_operations_path, class: "nav-link" %>
+        </li>
+        <li class="nav-item">
+          <%= link_to "Control Center", admin_operations_control_center_path, class: "nav-link" %>
+        </li>
+        <li class="nav-item">
+          <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "nav-link" %>
+        </li>
+        <li class="nav-item">
+          <%= link_to "Dead Jobs", admin_operations_dead_jobs_path, class: "nav-link" %>
+        </li>
+      </ul>
+    <% end %>
+
     <% if SiteSettings.multiuser_enabled? %>
       <hr>
       <h5><%= t(".moderation_heading") %></h5>
@@ -48,7 +68,7 @@
         </li>
         <% if SiteSettings.federation_enabled? %>
           <li class="nav-item">
-            <%= link_to t("settings.domain_blocks.index.title"), settings_domain_blocks_path, class: "nav-link" %>
+            <%= link_to t("settings.domain_blocks.index.heading"), settings_domain_blocks_path, class: "nav-link" %>
           </li>
         <% end %>
       </ul>

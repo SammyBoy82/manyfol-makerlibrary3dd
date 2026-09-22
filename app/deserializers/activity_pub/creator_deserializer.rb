@@ -2,7 +2,7 @@ module ActivityPub
   class CreatorDeserializer < ApplicationDeserializer
     def create!
       options = deserialize.merge(
-        fedipub_actor: @object
+        federails_actor: @object
       )
       Creator.create!(options)
     end
@@ -10,7 +10,7 @@ module ActivityPub
     private
 
     def deserialize
-      raise ArgumentError unless @object.is_a?(Fedipub::Actor)
+      raise ArgumentError unless @object.is_a?(Federails::Actor)
       {
         name: @object.name,
         slug: @object.username,

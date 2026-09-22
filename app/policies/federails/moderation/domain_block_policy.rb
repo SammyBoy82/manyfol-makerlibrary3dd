@@ -1,4 +1,4 @@
-class Fedipub::Moderation::DomainBlockPolicy < ApplicationPolicy
+class Federails::Moderation::DomainBlockPolicy < ApplicationPolicy
   def index?
     all_of(
       SiteSettings.federation_enabled?,

@@ -1,10 +1,10 @@
-module FedipubCommon
+module FederailsCommon
   extend ActiveSupport::Concern
-  include Fedipub::ActorEntity
+  include Federails::ActorEntity
 
   included do
-    scope :local, -> { includes(:fedipub_actor).where("fedipub_actor.local": true) }
-    scope :remote, -> { includes(:fedipub_actor).where("fedipub_actor.local": false) }
+    scope :local, -> { includes(:federails_actor).where("federails_actor.local": true) }
+    scope :remote, -> { includes(:federails_actor).where("federails_actor.local": false) }
   end
 
   # Listed in increasing order of priority
@@ -16,12 +16,12 @@ module FedipubCommon
     list: :public_id
   }
 
-  def fedipub_actor
-    return nil unless DatabaseDetector.table_ready? "fedipub_actors"
+  def federails_actor
+    return nil unless DatabaseDetector.table_ready? "federails_actors"
     return nil unless persisted?
-    act = Fedipub::Actor.find_by(entity: self)
+    act = Federails::Actor.find_by(entity: self)
     if act.nil?
-      act = create_fedipub_actor
+      act = create_federails_actor
       reload
     end
     act
@@ -31,7 +31,7 @@ module FedipubCommon
   end
 
   def local?
-    fedipub_actor ? fedipub_actor.local? : true
+    federails_actor ? federails_actor.local? : true
   end
 
   def remote?

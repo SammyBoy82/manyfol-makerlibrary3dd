@@ -1,4 +1,4 @@
-class Fedipub::Moderation::ReportPolicy < ApplicationPolicy
+class Federails::Moderation::ReportPolicy < ApplicationPolicy
   def index?
     all_of(
       SiteSettings.multiuser_enabled?,

@@ -11,7 +11,7 @@ class Components::ModelCard < Components::Base
 
   def initialize(model:)
     @model = model
-    @actor = @model.fedipub_actor
+    @actor = @model.federails_actor
   end
 
   def before_template

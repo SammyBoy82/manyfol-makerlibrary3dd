@@ -1,4 +1,4 @@
-class Fedipub::FollowingPolicy < ApplicationPolicy
+class Federails::FollowingPolicy < ApplicationPolicy
   def create?
     all_of(
       one_of(

@@ -60,13 +60,13 @@ ru:
         privacy_policy:
         sign_in_url: Войти
         status:
-      fedipub/moderation/domain_block:
+      federails/moderation/domain_block:
         created_at: Дата создания
         domain: Домен
-      fedipub/moderation/report:
+      federails/moderation/report:
         content:
         created_at:
-        fedipub_actor:
+        federails_actor:
         object:
       group:
         description: Примечания
@@ -282,14 +282,14 @@ ru:
         other:
         two:
         zero:
-      fedipub/moderation/domain_block:
+      federails/moderation/domain_block:
         few:
         many:
         one:
         other:
         two:
         zero:
-      fedipub/moderation/report:
+      federails/moderation/report:
         few:
         many:
         one:

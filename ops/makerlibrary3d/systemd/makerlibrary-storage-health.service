@@ -1,0 +1,9 @@
+[Unit]
+Description=MakerLibrary3D Storage Health Check
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/makerlibrary-storage-health
+User=root
+Group=root

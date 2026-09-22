@@ -1,0 +1,508 @@
+<div class="card mb-4">
+
+  <div class="card-header d-flex justify-content-between align-items-center">
+
+    <div>
+      <strong>Storage Sources</strong>
+
+      <%= link_to "Add Storage Source",
+            new_admin_storage_source_path,
+            class: "btn btn-sm btn-primary ms-3" %>
+
+      <div class="small text-muted">
+        Browse mounted storage and add folders as Manyfold libraries.
+      </div>
+    </div>
+
+    <span class="badge bg-secondary">
+      <%= sources.size %> source(s)
+    </span>
+
+  </div>
+
+
+  <div class="card-body">
+
+    <% sources.each do |source| %>
+
+      <% health =
+           @storage_health_by_source[
+             source.key
+           ] || {} %>
+
+      <% latest_health =
+           health[:latest] %>
+
+      <div class="card mb-3">
+
+        <div class="card-header">
+
+          <div class="d-flex justify-content-between align-items-start">
+
+            <div>
+
+              <div class="d-flex align-items-center gap-2">
+
+                <strong>
+                  <%= source.name %>
+                </strong>
+
+                <% if health[:attention] %>
+                  <span
+                    class="badge bg-danger"
+                    title="This storage source requires administrator attention.">
+                    Attention Required
+                  </span>
+                <% end %>
+
+                <% if source.available %>
+
+                  <span
+                    class="badge bg-success"
+                    title="This storage source is accessible from inside MakerLibrary3D.">
+                    Online
+                  </span>
+
+                <% else %>
+
+                  <span
+                    class="badge bg-danger"
+                    title="This storage source cannot currently be accessed.">
+                    Offline
+                  </span>
+
+                <% end %>
+
+
+                <% if source.readable %>
+
+                  <span class="badge bg-success">
+                    Read
+                  </span>
+
+                <% end %>
+
+
+                <% if source.writable %>
+
+                  <span class="badge bg-success">
+                    Write
+                  </span>
+
+                <% else %>
+
+                  <span class="badge bg-secondary">
+                    Read Only
+                  </span>
+
+                <% end %>
+
+              </div>
+
+
+              <div class="small text-muted mt-1">
+                <%= source.kind %>
+              </div>
+
+              <div class="mt-2 d-flex gap-2 flex-wrap">
+
+                <% if latest_health.nil? %>
+
+                  <span
+                    class="badge bg-secondary"
+                    title="No persistent connection test has been recorded yet.">
+                    Never Tested
+                  </span>
+
+                <% elsif latest_health.state.to_s == "passed" %>
+
+                  <span class="badge bg-success">
+                    Healthy
+                  </span>
+
+                <% else %>
+
+                  <span class="badge bg-danger">
+                    Last Test Failed
+                  </span>
+
+                <% end %>
+
+
+                <% if health[:stale] %>
+
+                  <span
+                    class="badge bg-warning text-dark"
+                    title="The last persistent health test is more than 24 hours old.">
+                    Health Check Stale
+                  </span>
+
+                <% end %>
+
+              </div>
+
+
+              <% if latest_health %>
+
+                <div class="small mt-2">
+
+                  Last checked:
+
+                  <strong>
+                    <% if latest_health.updated_at %>
+                      <%= latest_health.updated_at
+                            .in_time_zone
+                            .strftime("%Y-%m-%d %H:%M:%S") %>
+                    <% else %>
+                      Unknown
+                    <% end %>
+                  </strong>
+
+                  &nbsp;·&nbsp;
+
+                  Passed:
+                  <strong>
+                    <%= health[:passed].to_i %>
+                  </strong>
+
+                  &nbsp;·&nbsp;
+
+                  Failed:
+                  <strong>
+                    <%= health[:failed].to_i %>
+                  </strong>
+
+                </div>
+
+
+                <% if latest_health.message.present? ||
+                      latest_health.error.present? %>
+
+                  <div class="small text-muted mt-1">
+
+                    <%= truncate(
+                          latest_health.message.presence ||
+                          latest_health.error.presence,
+                          length: 180
+                        ) %>
+
+                  </div>
+
+                <% end %>
+
+              <% end %>
+
+
+              <div class="mt-1">
+                <code>
+                  <%= source.container_path %>
+                </code>
+              </div>
+
+
+              <% if source.account_name.present? %>
+
+                <div class="small mt-1">
+
+                  Azure Account:
+                  <strong>
+                    <%= source.account_name %>
+                  </strong>
+
+                  &nbsp;·&nbsp;
+
+                  Container:
+                  <strong>
+                    <%= source.container_name %>
+                  </strong>
+
+                </div>
+
+              <% end %>
+
+            </div>
+
+
+            <div class="text-end small">
+
+              <div>
+                <strong>
+                  <%= number_with_delimiter(source.folder_count) %>
+                </strong>
+                folder(s)
+              </div>
+
+              <div>
+                <strong>
+                  <%= number_with_delimiter(source.libraries) %>
+                </strong>
+                Manyfold library/libraries
+              </div>
+
+              <div>
+                <strong>
+                  <%= number_with_delimiter(source.models) %>
+                </strong>
+                models
+              </div>
+
+              <div>
+                <strong>
+                  <%= number_with_delimiter(source.files) %>
+                </strong>
+                files
+              </div>
+
+              <div>
+                <%= number_to_human_size(source.registered_bytes) %>
+                registered
+              </div>
+
+            </div>
+
+            <div class="mt-3 d-flex justify-content-end gap-2 flex-wrap">
+
+              <%= link_to "Manage",
+                    manage_admin_storage_source_path(source.key),
+                    class: "btn btn-sm btn-primary" %>
+
+              <%= button_to "Test Connection",
+                    test_admin_storage_source_path(source.key),
+                    method: :post,
+                    class: "btn btn-sm btn-outline-primary" %>
+
+              <%= link_to "Refresh Status",
+                    admin_file_storage_path,
+                    class: "btn btn-sm btn-outline-secondary" %>
+
+            </div>
+
+            <div class="mt-3 text-end">
+
+              <% if source.key == "local" %>
+
+                <span
+                  class="badge bg-secondary"
+                  title="The primary local storage source is protected and cannot be unmounted from this interface.">
+                  Protected System Storage
+                </span>
+
+              <% elsif source.key == "azure" %>
+
+                <% if source.libraries.to_i > 0 %>
+
+                  <span class="badge bg-primary me-2">
+                    Managed Azure Source
+                  </span>
+
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-danger"
+                    disabled
+                    title="Remove or move all Manyfold libraries using this storage source first.">
+                    Cannot Remove — <%= source.libraries %> Library Attached
+                  </button>
+
+                <% else %>
+
+                  <span class="badge bg-primary me-2">
+                    Managed Azure Source
+                  </span>
+
+                  <%= button_to "Remove Storage Source",
+                        admin_storage_source_path(source.key),
+                        method: :delete,
+                        class: "btn btn-sm btn-outline-danger d-inline-block",
+                        form: {
+                          class: "d-inline-block",
+                          data: {
+                            turbo_confirm:
+                              "Remove this Azure storage source? Azure Blob data will NOT be deleted."
+                          }
+                        } %>
+
+                <% end %>
+
+              <% else %>
+
+                <%= button_to "Remove Storage Source",
+                      admin_storage_source_path(source.key),
+                      method: :delete,
+                      class: "btn btn-sm btn-outline-danger",
+                      form: {
+                        data: {
+                          turbo_confirm:
+                            "Remove this storage source? Azure Blob data will NOT be deleted. Removal is blocked if Manyfold libraries still use it."
+                        }
+                      } %>
+
+              <% end %>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <% if source.available && source.readable %>
+
+          <div class="table-responsive">
+
+            <table class="table table-sm table-hover align-middle mb-0">
+
+              <thead>
+
+                <tr>
+                  <th>Folder</th>
+                  <th>Library Path</th>
+                  <th>Status</th>
+                  <th class="text-end">Action</th>
+                </tr>
+
+              </thead>
+
+
+              <tbody>
+
+                <% source.folders.each do |folder| %>
+
+                  <tr>
+
+                    <td>
+
+                      <strong>
+                        <%= folder.name %>
+                      </strong>
+
+                    </td>
+
+
+                    <td>
+
+                      <code class="text-break">
+                        <%= folder.path %>
+                      </code>
+
+                    </td>
+
+
+                    <td>
+
+                      <% if folder.registered %>
+
+                        <span
+                          class="badge bg-success"
+                          title="This folder already has a Manyfold Library database record.">
+                          Registered
+                        </span>
+
+                      <% else %>
+
+                        <span
+                          class="badge bg-warning text-dark"
+                          title="This folder exists on storage but has not yet been added as a Manyfold Library.">
+                          Available
+                        </span>
+
+                      <% end %>
+
+                    </td>
+
+
+                    <td class="text-end">
+
+                      <% if folder.registered %>
+
+                        <%= link_to "Open Library",
+                              models_path(
+                                library: folder.library
+                              ),
+                              class: "btn btn-sm btn-outline-secondary" %>
+
+                      <% else %>
+
+                        <%= link_to "Add Library",
+                              new_library_path(
+                                path: folder.path,
+                                name: folder.name
+                              ),
+                              class: "btn btn-sm btn-primary",
+                              title: "Open the normal Manyfold Create Library screen with this folder and name pre-filled." %>
+
+                      <% end %>
+
+                    </td>
+
+                  </tr>
+
+                <% end %>
+
+
+                <% if source.folders.empty? %>
+
+                  <tr>
+
+                    <td
+                      colspan="4"
+                      class="text-muted">
+
+                      No top-level folders were found.
+
+                    </td>
+
+                  </tr>
+
+                <% end %>
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+
+          <% if source.folders_truncated %>
+
+            <div class="card-footer small text-warning">
+
+              Showing the first
+              <%= Admin::StorageSources::MAX_FOLDERS %>
+              of
+              <%= number_with_delimiter(source.folder_count) %>
+              folders.
+
+            </div>
+
+          <% end %>
+
+        <% else %>
+
+          <div class="card-body text-danger">
+
+            Storage source is currently unavailable.
+
+          </div>
+
+        <% end %>
+
+      </div>
+
+    <% end %>
+
+  </div>
+
+
+  <div class="card-footer small text-muted">
+
+    <strong>Registered</strong>
+    means the folder has already been configured as a Manyfold Library.
+
+    <strong>Available</strong>
+    means the folder exists on storage and can be added as a library.
+
+    Creating a library uses Manyfold's normal validation and filesystem scan.
+
+  </div>
+
+</div>

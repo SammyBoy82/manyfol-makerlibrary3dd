@@ -1,0 +1,221 @@
+<meta http-equiv="refresh" content="30">
+
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Admin Operations</h1>
+      <p class="text-muted mb-0">Server, container, database, Redis, Sidekiq, and library storage overview.</p>
+      <div class="small text-muted mt-1">Auto-refresh: every 30 seconds</div>
+    </div>
+    <div class="d-flex gap-2">
+      <%= link_to "Media Maintenance", admin_media_maintenance_path, class: "btn btn-outline-primary" %>
+      <%= link_to "Sidekiq", "/admin/sidekiq", class: "btn btn-outline-secondary" %>
+      <%= link_to "Performance", "/admin/performance", class: "btn btn-outline-secondary" %>
+      <% if defined?(PgHero) %>
+        <%= link_to "PgHero", "/admin/pghero", class: "btn btn-outline-secondary" %>
+      <% end %>
+    </div>
+  </div>
+
+  <h2 class="h5 mb-3">Server / VM Health</h2>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">CPU Utilisation</div>
+      <div class="h4 mb-0"><%= @snapshot.host_cpu_percent %>%</div>
+      <div class="small text-muted"><%= @snapshot.cpu_count %> vCPU</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Load Average</div>
+      <div class="h4 mb-0"><%= @snapshot.load_1 %></div>
+      <div class="small text-muted">5m <%= @snapshot.load_5 %> · 15m <%= @snapshot.load_15 %></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Memory Used</div>
+      <div class="h4 mb-0"><%= @snapshot.memory_used_percent %>%</div>
+      <div class="small text-muted"><%= number_to_human_size(@snapshot.memory_available_bytes) %> available</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Swap Used</div>
+      <div class="h4 mb-0"><%= number_to_human_size(@snapshot.swap_used_bytes) %></div>
+      <div class="small text-muted">of <%= number_to_human_size(@snapshot.swap_total_bytes) %></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Root Disk Used</div>
+      <div class="h4 mb-0"><%= @snapshot.disk_used_percent %>%</div>
+      <div class="small text-muted"><%= number_to_human_size(@snapshot.disk_available_bytes) %> free</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Server Uptime</div>
+      <div class="h4 mb-0"><%= distance_of_time_in_words(@snapshot.uptime_seconds) %></div>
+    </div></div></div>
+  </div>
+
+  <h2 class="h5 mb-3">MakerLibrary3D Container</h2>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Container CPU</div>
+      <div class="h4 mb-0"><%= @snapshot.container_cpu_percent %>%</div>
+      <div class="small text-muted">of visible CPU capacity</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Container Memory</div>
+      <div class="h4 mb-0"><%= number_to_human_size(@snapshot.container_memory_bytes) %></div>
+      <% if @snapshot.container_memory_limit_bytes.to_i > 0 %>
+        <div class="small text-muted"><%= @snapshot.container_memory_percent %>% of <%= number_to_human_size(@snapshot.container_memory_limit_bytes) %></div>
+      <% else %>
+        <div class="small text-muted">No cgroup memory limit</div>
+      <% end %>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Container Uptime</div>
+      <div class="h4 mb-0"><%= distance_of_time_in_words(@snapshot.container_uptime_seconds) %></div>
+      <div class="small text-muted"><%= @snapshot.hostname %></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Processes</div>
+      <div class="h4 mb-0"><%= @snapshot.container_pids %></div>
+      <div class="small text-muted">cgroup PIDs</div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Network RX</div>
+      <div class="h4 mb-0"><%= number_to_human_size(@snapshot.container_network_rx_bytes) %></div>
+    </div></div></div>
+
+    <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Network TX</div>
+      <div class="h4 mb-0"><%= number_to_human_size(@snapshot.container_network_tx_bytes) %></div>
+    </div></div></div>
+  </div>
+
+  <h2 class="h5 mb-3">Services & Database</h2>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Redis</div>
+      <div class="h4 mb-0"><span class="badge <%= @snapshot.redis_ok ? 'bg-success' : 'bg-danger' %>"><%= @snapshot.redis_ok ? 'Healthy' : 'Down' %></span></div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body">
+      <div class="text-muted small">PostgreSQL</div>
+      <div class="h4 mb-0"><span class="badge <%= @snapshot.postgres_ok ? 'bg-success' : 'bg-danger' %>"><%= @snapshot.postgres_ok ? 'Healthy' : 'Down' %></span></div>
+      <div class="small text-muted"><%= @snapshot.database_connections %> connections</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Database Size</div><div class="h4 mb-0"><%= number_to_human_size(@snapshot.database_size_bytes) %></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Open Problems</div><div class="h4 mb-0"><%= @snapshot.problems_total %></div></div></div></div>
+  </div>
+
+  <h2 class="h5 mb-3">Library / Attached Storage</h2>
+  <div class="card mb-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Library</th>
+              <th>Storage</th>
+              <th>Path</th>
+              <th>Library Size</th>
+              <th>Device / Mount</th>
+              <th>Volume Free</th>
+              <th>Volume Total</th>
+              <th>Volume Usage</th>
+              <th>Models</th>
+              <th>Files</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @snapshot.library_storage.each do |storage| %>
+              <tr>
+                <td><strong><%= storage[:name] %></strong></td>
+                <td><span class="badge bg-light text-dark border"><%= storage[:service].to_s.upcase %></span></td>
+                <td><code><%= storage[:path] %></code></td>
+                <% if storage[:error].present? %>
+                  <td colspan="5"><span class="badge bg-danger">Unavailable: <%= storage[:error] %></span></td>
+                <% elsif storage[:total].present? %>
+                  <td><strong><%= number_to_human_size(storage[:directory_bytes]) %></strong></td>
+                  <td>
+                    <div><code><%= storage[:device] %></code></div>
+                    <div class="small text-muted"><%= storage[:mountpoint] %></div>
+                  </td>
+                  <td><%= number_to_human_size(storage[:available]) %></td>
+                  <td><%= number_to_human_size(storage[:total]) %></td>
+                  <td>
+                    <span class="badge <%= storage[:used_percent].to_f >= 90 ? 'bg-danger' : storage[:used_percent].to_f >= 80 ? 'bg-warning text-dark' : 'bg-success' %>">
+                      <%= storage[:used_percent] %>%
+                    </span>
+                  </td>
+                <% else %>
+                  <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+                <% end %>
+                <td><%= storage[:models] %></td>
+                <td><%= storage[:files] %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Models</div><div class="h4 mb-0"><%= @snapshot.models %></div></div></div></div>
+    <div class="col-6 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Model Files</div><div class="h4 mb-0"><%= @snapshot.model_files %></div></div></div></div>
+    <div class="col-6 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Sidekiq Processes</div><div class="h4 mb-0"><%= @snapshot.sidekiq_processes %></div></div></div></div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header"><strong>Sidekiq Queues</strong></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+              <thead><tr><th>Queue</th><th>Jobs</th></tr></thead>
+              <tbody>
+                <% @snapshot.queues.each do |name, count| %>
+                  <tr><td><%= name %></td><td><span class="badge <%= count.to_i.zero? ? 'bg-success' : 'bg-warning text-dark' %>"><%= count %></span></td></tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer small text-muted">
+          Processes: <%= @snapshot.sidekiq_processes %> · Retries: <%= @snapshot.retries %> · Scheduled: <%= @snapshot.scheduled %> · Dead: <%= @snapshot.dead %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header"><strong>Problem Categories</strong></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+              <thead><tr><th>Category</th><th>Count</th></tr></thead>
+              <tbody>
+                <% if @snapshot.problems_by_category.any? %>
+                  <% @snapshot.problems_by_category.sort_by { |name, _| name.to_s }.each do |name, count| %>
+                    <tr><td><%= name.to_s.humanize %></td><td><span class="badge bg-secondary"><%= count %></span></td></tr>
+                  <% end %>
+                <% else %>
+                  <tr><td colspan="2" class="text-muted">No open problems.</td></tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info mb-0">
+    Library Size is the actual size of each library folder. Volume Free/Total/Usage refer to the underlying mounted filesystem, so libraries sharing the same disk will correctly show the same volume capacity while having different Library Size values.
+  </div>
+</div>

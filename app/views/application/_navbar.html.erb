@@ -12,14 +12,26 @@
     </button>
     <div class="collapse navbar-collapse row" id="navbar">
       <ul class="navbar-nav col ps-4 ps-md-0 align-self-start" role="presentation">
+        <% if current_user&.is_member? %>
+          <li class="nav-item" role="presentation">
+            <%= nav_link "house",
+                  "Dashboard",
+                  dashboard_path,
+                  text_style: "d-md-none d-lg-inline",
+                  id: "nav-link-dashboard" %>
+          </li>
+        <% end %>
+
         <li class="nav-item" role="presentation">
           <%= nav_link "box", Model.model_name.human(count: 100), models_path(@filter&.to_params), text_style: "d-md-none d-lg-inline", id: "nav-link-models",
                 data: tour_attributes(id: "nav-link-models", title: Model.model_name.human(count: 100), description: t("tour.navbar.models.description")) %>
         </li>
-        <li class="nav-item" role="presentation">
-          <%= nav_link "people", Creator.model_name.human(count: 100), creators_path(@filter&.to_params(except: :creator)), text_style: "d-md-none d-lg-inline", id: "nav-link-creators",
-                data: tour_attributes(id: "nav-link-creators", title: Creator.model_name.human(count: 100), description: t("tour.navbar.creators.description")) %>
-        </li>
+        <% if current_user&.is_contributor? %>
+          <li class="nav-item" role="presentation">
+            <%= nav_link "people", Creator.model_name.human(count: 100), creators_path(@filter&.to_params(except: :creator)), text_style: "d-md-none d-lg-inline", id: "nav-link-creators",
+                  data: tour_attributes(id: "nav-link-creators", title: Creator.model_name.human(count: 100), description: t("tour.navbar.creators.description")) %>
+          </li>
+        <% end %>
         <li class="nav-item" role="presentation">
           <%= nav_link "collection", Collection.model_name.human(count: 100), collections_path(@filter&.to_params(except: :collection)), text_style: "d-md-none d-lg-inline", id: "nav-link-collections",
                 data: tour_attributes(id: "nav-link-collections", title: Collection.model_name.human(count: 100), description: t("tour.navbar.collections.description")) %>
@@ -142,6 +154,9 @@
                 <%= Icon(icon: "person") %>
               <% end %>
               <ul class="dropdown-menu dropdown-menu-end" id="preferences-menu">
+
+                <% if current_user.is_contributor? %>
+
                 <%= DropdownItem label: t("devise.registrations.edit.title"), path: edit_user_registration_path %>
                 <%= DropdownDivider() %>
                 <%= DropdownHeader text: t(".my_stuff") %>
@@ -161,6 +176,31 @@
                 <%- end %>
                 <%= DropdownDivider() %>
                 <%= DropdownItem icon: "box-arrow-right", label: t(".log_out"), path: destroy_user_session_path, method: :delete %>
+
+                <% else %>
+
+                  <%# MakerLibrary3D member navigation %>
+
+                  <%= DropdownItem label: "Dashboard",
+                        path: dashboard_path %>
+
+                  <%= DropdownItem label: "Browse Models",
+                        path: models_path %>
+
+                  <%= DropdownDivider() %>
+
+                  <%= DropdownItem label: "Account Settings",
+                        path: edit_user_registration_path %>
+
+                  <%= DropdownDivider() %>
+
+                  <%= DropdownItem icon: "box-arrow-right",
+                        label: t(".log_out"),
+                        path: destroy_user_session_path,
+                        method: :delete %>
+
+                <% end %>
+
               </ul>
             </li>
           <% else %>

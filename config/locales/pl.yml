@@ -60,13 +60,13 @@ pl:
         privacy_policy:
         sign_in_url: Zaloguj się
         status:
-      fedipub/moderation/domain_block:
+      federails/moderation/domain_block:
         created_at: Data utworzenia
         domain: Domena
-      fedipub/moderation/report:
+      federails/moderation/report:
         content: Komentarz
         created_at:
-        fedipub_actor: Zgłoszone przez
+        federails_actor: Zgłoszone przez
         object: Obiekt
       group:
         description: Opis
@@ -282,14 +282,14 @@ pl:
         other:
         two:
         zero:
-      fedipub/moderation/domain_block:
+      federails/moderation/domain_block:
         few: Bloki domen
         many: Bloków domen
         one: Blok domeny
         other: Bloki domen
         two:
         zero:
-      fedipub/moderation/report:
+      federails/moderation/report:
         few: Zgłoszenia
         many: Zgłoszeń
         one: Zgłoszenie

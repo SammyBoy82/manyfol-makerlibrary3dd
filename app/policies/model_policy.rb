@@ -1,6 +1,13 @@
 class ModelPolicy < ApplicationPolicy
   def show?
-    super && !(user&.sensitive_content_handling == "hide" && record.sensitive)
+    return super if user&.is_moderator?
+    return false unless entitled_to_model_library?
+
+    super &&
+      !(
+        user&.sensitive_content_handling == "hide" &&
+        record.sensitive
+      )
   end
 
   def configure_merge?
@@ -17,19 +24,35 @@ class ModelPolicy < ApplicationPolicy
   end
 
   def upload?
-    edit? && UploadPolicy.new(user, record).create?
+    edit? &&
+      UploadPolicy.new(
+        user,
+        record
+      ).create?
   end
 
   def download?
-    check_permissions(record, ["view", "edit", "own"], user)
+    return true if user&.is_moderator?
+    return false unless entitled_to_model_library?
+
+    check_permissions(
+      record,
+      ["view", "edit", "own"],
+      user
+    )
   end
 
   def destroy?
-    super && (record.is_a?(Model) ? !record.contains_other_models? : true)
+    super &&
+      (
+        record.is_a?(Model) ?
+          !record.contains_other_models? :
+          true
+      )
   end
 
   def scan?
-    user&.is_contributor?
+    user&.is_moderator?
   end
 
   def sync?
@@ -50,11 +73,39 @@ class ModelPolicy < ApplicationPolicy
 
   class Scope < ApplicationPolicy::Scope
     def resolve
-      if user&.sensitive_content_handling == "hide"
-        super.where(sensitive: false)
-      else
-        super
-      end
+      base =
+        if user&.sensitive_content_handling == "hide"
+          super.where(
+            sensitive: false
+          )
+        else
+          super
+        end
+
+      return base if user&.is_moderator?
+      return base.none unless user
+      return base.none unless user.membership_access_active?
+
+      plan =
+        user.membership_plan
+
+      return base.none unless plan&.active?
+      return base if plan.all_libraries?
+
+      base.where(
+        library_id: plan.library_ids
+      )
     end
+  end
+
+  private
+
+  def entitled_to_model_library?
+    return false unless user
+    return false unless record.respond_to?(:library)
+
+    user.entitled_to_library?(
+      record.library
+    )
   end
 end

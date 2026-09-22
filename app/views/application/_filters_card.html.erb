@@ -22,14 +22,16 @@
         <div class="col-auto"><%= link_to Icon(icon: "trash", label: t(".remove_library_filter")), @filter.to_params(except: :library), {class: "text-danger"} %></div>
       </div>
     <% end %>
-    <% if @filter.filtering_by?(:creator) %>
+    <% if current_user&.is_contributor? &&
+          @filter.filtering_by?(:creator) %>
       <div class="row">
         <div class="col-auto"><%= Icon icon: "person", label: Creator.model_name.human %></div>
         <div class="col" aria-label="<%= Creator.model_name.human %>"><%= @filter.creator ? link_to(@filter.creator.name.careful_titleize, @filter.creator) : t(".unknown") %></div>
         <div class="col-auto"><%= link_to Icon(icon: "trash", label: t(".remove_creator_filter")), @filter.to_params(except: :creator), {class: "text-danger"} %></div>
       </div>
     <% end %>
-    <% if @filter.filtering_by?(:owner) %>
+    <% if current_user&.is_contributor? &&
+          @filter.filtering_by?(:owner) %>
       <div class="row">
         <div class="col-auto"><%= Icon icon: "person", label: t(".owner") %></div>
         <div class="col" aria-label="<%= t(".owner") %>"><%= @filter.owner.username %></div>

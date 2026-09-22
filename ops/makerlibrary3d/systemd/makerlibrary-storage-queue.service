@@ -1,0 +1,10 @@
+[Unit]
+Description=MakerLibrary3D Storage Source Queue Processor
+After=network-online.target docker.service slforge-storage-propagation.service
+Wants=network-online.target
+Requires=slforge-storage-propagation.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/makerlibrary-storage-helper process-queue
+TimeoutStartSec=0
+UMask=0077

@@ -1,6 +1,125 @@
 <% content_for :items do %>
   <%= turbo_stream_from Model.model_name.plural %>
 
+  <div class="card mb-3 ml3d-catalog-toolbar">
+    <div class="card-body py-3">
+
+      <%= form_with url: models_path,
+                    method: :get,
+                    local: true,
+                    class: "row g-2 align-items-end" do %>
+
+        <div class="col-lg-4">
+          <label class="form-label small fw-semibold mb-1">
+            Search Models
+          </label>
+
+          <%= text_field_tag :q,
+                @filter.parameter(:q),
+                placeholder: "Search model names, descriptions and metadata…",
+                class: "form-control" %>
+        </div>
+
+        <div class="col-lg-3">
+          <label class="form-label small fw-semibold mb-1">
+            Category
+          </label>
+
+          <%= select_tag :library,
+                options_for_select(
+                  [["All Categories", ""]] +
+                  @category_libraries.map { |library|
+                    [
+                      "#{library.name} (#{@category_counts[library.id] || 0})",
+                      library.to_param
+                    ]
+                  },
+                  @filter.parameter(:library)
+                ),
+                class: "form-select" %>
+        </div>
+
+        <div class="col-lg-2">
+          <label class="form-label small fw-semibold mb-1">
+            File Type
+          </label>
+
+          <%= select_tag :filetype,
+                options_for_select(
+                  [
+                    ["All Types", ""],
+                    ["STL", "stl"],
+                    ["3MF", "3mf"],
+                    ["OBJ", "obj"],
+                    ["ZIP", "zip"]
+                  ],
+                  @filter.parameter(:filetype)
+                ),
+                class: "form-select" %>
+        </div>
+
+        <div class="col-lg-1">
+          <label class="form-label small fw-semibold mb-1">
+            Items
+          </label>
+
+          <%= select_tag :per_page,
+                options_for_select(
+                  [
+                    ["24", 24],
+                    ["48", 48],
+                    ["100", 100]
+                  ],
+                  @per_page
+                ),
+                class: "form-select" %>
+        </div>
+
+        <div class="col-lg-2">
+          <%= submit_tag "Browse",
+                class: "btn btn-primary me-1" %>
+
+          <%= link_to "Clear",
+                models_path,
+                class: "btn btn-outline-secondary" %>
+        </div>
+
+        <% @filter.to_params.each do |key, value| %>
+          <% next if %w[q library filetype per_page].include?(key.to_s) %>
+
+          <% if value.is_a?(Array) %>
+            <% value.each do |item| %>
+              <%= hidden_field_tag "#{key}[]", item %>
+            <% end %>
+          <% else %>
+            <%= hidden_field_tag key, value %>
+          <% end %>
+        <% end %>
+
+      <% end %>
+
+      <div class="d-flex flex-wrap gap-2 mt-3">
+        <%= link_to "All Categories",
+              @filter.to_params(except: :library),
+              class: "badge rounded-pill text-decoration-none #{'text-bg-primary' unless @filter.filtering_by?(:library)} border" %>
+
+        <% @category_libraries.each do |library| %>
+          <% selected =
+               @filter.parameter(:library).to_s ==
+               library.to_param.to_s %>
+
+          <%= link_to(
+                "#{library.name} · #{@category_counts[library.id] || 0}",
+                @filter.to_params.merge(library: library.to_param),
+                class:
+                  "badge rounded-pill text-decoration-none "                   "#{selected ? 'text-bg-primary' : 'text-bg-light text-dark'} border"
+              ) %>
+        <% end %>
+      </div>
+
+    </div>
+  </div>
+
   <% if @models.empty? %>
     <div class="alert alert-info">
       <%= Icon icon: "person-arms-up", label: "" %>
@@ -12,9 +131,31 @@
     </div>
   <% else %>
     <div class="skip-link-container">
-      <div class="row">
+      <div class="row align-items-center mb-2">
         <%= skip_link "sidebar", t(".skip_models") %>
+
         <div class="col">
+          <div class="small text-muted">
+            <strong>
+              <%= number_with_delimiter(@models.total_count) %>
+            </strong>
+            models
+
+            <% if @filter.filtering_by?(:library) %>
+              <% selected_library =
+                   @category_libraries.find {
+                     |library|
+                     library.to_param.to_s ==
+                       @filter.parameter(:library).to_s
+                   } %>
+
+              <% if selected_library %>
+                in
+                <strong><%= selected_library.name %></strong>
+              <% end %>
+            <% end %>
+          </div>
+
           <%= paginate @models %>
         </div>
         <div class="col col-auto">
@@ -22,7 +163,9 @@
         </div>
       </div>
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 mb-4">
-        <%= render_component_collection Components::ModelCard, :model, @models %>
+        <div class="ml3d-model-grid">
+  <%= render_component_collection Components::ModelCard, :model, @models %>
+</div>
       </div>
       <%= paginate @models %>
       <% if @search %>

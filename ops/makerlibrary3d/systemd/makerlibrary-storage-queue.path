@@ -1,0 +1,7 @@
+[Unit]
+Description=Watch MakerLibrary3D Storage Source Requests
+[Path]
+PathExistsGlob=/srv/slforge/docker/manyfold/config/storage-requests/*.json
+Unit=makerlibrary-storage-queue.service
+[Install]
+WantedBy=multi-user.target

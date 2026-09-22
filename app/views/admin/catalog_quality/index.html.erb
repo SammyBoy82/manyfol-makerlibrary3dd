@@ -1,0 +1,173 @@
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-start mb-4">
+
+    <div>
+      <h1>Catalog Quality</h1>
+
+      <p class="text-muted mb-0">
+        Quality analysis and safe repair tools for MakerLibrary3D catalog metadata.
+      </p>
+    </div>
+
+    <div>
+      <%= button_to "Repair Missing Previews",
+            repair_all_admin_catalog_quality_previews_path,
+            method: :post,
+            class: "btn btn-primary" %>
+    </div>
+
+  </div>
+
+  <div class="row g-3 mb-4">
+
+    <% [
+      ["Models", @summary[:total]],
+      ["Healthy", @summary[:healthy]],
+      ["Needs Attention", @summary[:needs_attention]],
+      ["Critical", @summary[:critical]]
+    ].each do |label, value| %>
+
+      <div class="col-md-3">
+        <div class="card h-100">
+          <div class="card-body">
+
+            <div class="text-muted">
+              <%= label %>
+            </div>
+
+            <div class="display-6">
+              <%= value %>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    <% end %>
+
+  </div>
+
+  <div class="row g-3 mb-4">
+
+    <% [
+      ["Missing Preview", @summary[:missing_preview]],
+      ["Missing Caption", @summary[:missing_caption]],
+      ["Missing Collection", @summary[:missing_collection]],
+      ["Missing Tags", @summary[:missing_tags]],
+      ["Poor Name", @summary[:poor_name]]
+    ].each do |label, value| %>
+
+      <div class="col-md">
+        <div class="card h-100">
+          <div class="card-body">
+
+            <div class="text-muted">
+              <%= label %>
+            </div>
+
+            <h3 class="mb-0">
+              <%= value %>
+            </h3>
+
+          </div>
+        </div>
+      </div>
+
+    <% end %>
+
+  </div>
+
+  <div class="card">
+
+    <div class="card-header">
+      Models Requiring Attention
+    </div>
+
+    <div class="table-responsive">
+
+      <table class="table table-striped align-middle mb-0">
+
+        <thead>
+          <tr>
+            <th>Score</th>
+            <th>Status</th>
+            <th>Model</th>
+            <th>Library</th>
+            <th>Issues</th>
+            <th>Path</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          <% @results.each do |result| %>
+
+            <tr>
+
+              <td>
+                <strong><%= result.score %></strong>
+              </td>
+
+              <td>
+                <%= result.status %>
+              </td>
+
+              <td>
+                <%= link_to result.model.name,
+                      model_path(result.model) %>
+              </td>
+
+              <td>
+                <%= result.model.library&.name %>
+              </td>
+
+              <td>
+                <% if result.issues.empty? %>
+                  <span class="text-success">
+                    Healthy
+                  </span>
+                <% else %>
+                  <% result.issues.each do |issue| %>
+                    <span class="badge text-bg-secondary me-1">
+                      <%= issue.humanize %>
+                    </span>
+                  <% end %>
+                <% end %>
+              </td>
+
+              <td>
+                <small>
+                  <%= result.model.path %>
+                </small>
+              </td>
+
+              <td>
+                <% if result.issues.include?("missing_preview") %>
+
+                  <%= button_to "Repair Preview",
+                        repair_admin_catalog_quality_preview_path(result.model),
+                        method: :post,
+                        class: "btn btn-sm btn-outline-primary" %>
+
+                <% else %>
+
+                  <span class="text-muted">—</span>
+
+                <% end %>
+              </td>
+
+            </tr>
+
+          <% end %>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</div>

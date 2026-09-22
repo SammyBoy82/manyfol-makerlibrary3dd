@@ -1,24 +1,24 @@
 module Followable
   extend ActiveSupport::Concern
-  include FedipubCommon
+  include FederailsCommon
 
   included do
-    delegate :following_followers, to: :fedipub_actor
+    delegate :following_followers, to: :federails_actor
     after_followed :auto_accept
   end
 
   def followers
-    fedipub_actor.followers.map(&:entity)
+    federails_actor.followers.map(&:entity)
   end
 
   def followed_by?(follower)
-    fedipub_actor.followers.include? follower.fedipub_actor
+    federails_actor.followers.include? follower.federails_actor
   end
 
   private
 
   def auto_accept(follow)
-    return unless fedipub_actor.local?
+    return unless federails_actor.local?
     follow.accept!
   end
 end

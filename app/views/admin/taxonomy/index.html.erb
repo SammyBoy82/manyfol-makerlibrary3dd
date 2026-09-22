@@ -1,0 +1,239 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h2 class="mb-1">Taxonomy & Catalog</h2>
+
+    <p class="text-muted mb-0">
+      Catalog organization, classification health and cleanup tools.
+    </p>
+  </div>
+
+  <%= link_to "Bulk Edit Models",
+        edit_models_path,
+        class: "btn btn-outline-primary" %>
+</div>
+
+<div class="row g-3 mb-4">
+
+  <% [
+    ["Models", @summary[:models]],
+    ["Categories", @summary[:libraries]],
+    ["Collections", @summary[:collections]],
+    ["Tags", @summary[:tags]]
+  ].each do |label, value| %>
+
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">
+            <%= label %>
+          </div>
+
+          <div class="fs-3 fw-semibold">
+            <%= number_with_delimiter(value) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <% end %>
+
+</div>
+
+<div class="row g-3 mb-4">
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Models without Tags</div>
+        <div class="fs-4 fw-semibold">
+          <%= number_with_delimiter(@summary[:untagged_models]) %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Models without Collections</div>
+        <div class="fs-4 fw-semibold">
+          <%= number_with_delimiter(@summary[:uncollected_models]) %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Empty Collections</div>
+        <div class="fs-4 fw-semibold">
+          <%= number_with_delimiter(@summary[:empty_collections]) %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Possible Duplicate Tags</div>
+        <div class="fs-4 fw-semibold">
+          <%= number_with_delimiter(@summary[:duplicate_tag_groups]) %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    <strong>Possible Duplicate / Near-Duplicate Tags</strong>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Normalized</th>
+          <th>Existing Tags</th>
+          <th>Usage</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% @duplicate_tag_groups.each do |normalized, tags| %>
+          <tr>
+            <td>
+              <code><%= normalized %></code>
+            </td>
+
+            <td>
+              <% tags.each do |_id, name, count| %>
+                <span class="badge text-bg-light border text-dark me-1">
+                  <%= name %>
+                </span>
+              <% end %>
+            </td>
+
+            <td>
+              <%= tags.sum { |_id, _name, count| count.to_i } %>
+            </td>
+          </tr>
+        <% end %>
+
+        <% if @duplicate_tag_groups.empty? %>
+          <tr>
+            <td colspan="3" class="text-center text-muted py-4">
+              No obvious duplicate tag groups found.
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <div class="col-xl-6">
+    <div class="card h-100">
+      <div class="card-header">
+        <strong>Models without Tags</strong>
+      </div>
+
+      <div class="list-group list-group-flush">
+        <% @untagged_models.each do |model| %>
+          <%= link_to model_path(model),
+                class: "list-group-item list-group-item-action" do %>
+
+            <div class="d-flex justify-content-between">
+              <span><%= model.name %></span>
+
+              <span class="text-muted small">
+                <%= model.library&.name || "No Category" %>
+              </span>
+            </div>
+          <% end %>
+        <% end %>
+
+        <% if @untagged_models.empty? %>
+          <div class="list-group-item text-muted">
+            No untagged models.
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-6">
+    <div class="card h-100">
+      <div class="card-header">
+        <strong>Models without Collections</strong>
+      </div>
+
+      <div class="list-group list-group-flush">
+        <% @uncollected_models.each do |model| %>
+          <%= link_to model_path(model),
+                class: "list-group-item list-group-item-action" do %>
+
+            <div class="d-flex justify-content-between">
+              <span><%= model.name %></span>
+
+              <span class="text-muted small">
+                <%= model.library&.name || "No Category" %>
+              </span>
+            </div>
+          <% end %>
+        <% end %>
+
+        <% if @uncollected_models.empty? %>
+          <div class="list-group-item text-muted">
+            Every model belongs to a collection.
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="card mt-4">
+  <div class="card-header">
+    <strong>Empty Collections</strong>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Collection</th>
+          <th>Parent</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% @empty_collections.each do |collection| %>
+          <tr>
+            <td>
+              <%= link_to collection.name, collection_path(collection) %>
+            </td>
+
+            <td>
+              <%= collection.collection&.name || "—" %>
+            </td>
+          </tr>
+        <% end %>
+
+        <% if @empty_collections.empty? %>
+          <tr>
+            <td colspan="2" class="text-center text-muted py-4">
+              No empty collections.
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

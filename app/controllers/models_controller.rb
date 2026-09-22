@@ -19,7 +19,39 @@ class ModelsController < ApplicationController
   include ModelsController::Merge
 
   def index
-    @models = @filter.models(policy_scope(Model))
+    catalog_scope =
+      policy_scope(Model)
+
+    all_libraries =
+      Library.unscoped.order(:name).to_a
+
+    @offline_libraries =
+      all_libraries.reject(&:storage_exists?)
+
+    if @offline_libraries.any?
+      catalog_scope =
+        catalog_scope.where.not(
+          library_id: @offline_libraries.map(&:id)
+        )
+
+      flash.now[:alert] =
+        "Some model libraries are temporarily offline. " +
+        "Their models are hidden until storage connectivity is restored: " +
+        @offline_libraries.map(&:name).join(", ")
+    end
+
+    @category_counts =
+      catalog_scope
+        .group(:library_id)
+        .count
+
+    @category_libraries =
+      Library
+        .where(id: @category_counts.keys)
+        .order(:name)
+
+    @models =
+      @filter.models(catalog_scope)
     @search = params[:q].presence
     prepare_model_list
     set_indexable @models

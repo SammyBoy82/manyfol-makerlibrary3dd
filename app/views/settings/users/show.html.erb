@@ -51,7 +51,7 @@
   <% if SiteSettings.federation_enabled? %>
     <tr>
       <th><%= t("settings.users.index.fediverse_address") %></th>
-      <td><%= @user.fedipub_actor.at_address %></td>
+      <td><%= @user.federails_actor.at_address %></td>
     </tr>
   <% else %>
     <tr>

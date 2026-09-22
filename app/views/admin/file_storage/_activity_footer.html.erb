@@ -1,0 +1,18 @@
+<section id="storage-activity" class="mt-5 pt-4 border-top">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+    <div><h2 class="h4 mb-1">Storage activity</h2><p class="small text-muted mb-0">Newest first · 20 entries per page · <%= @activity_page.total %> saved entries</p></div>
+    <%= button_to "Clear Completed History", clear_storage_activity_path, method: :post,
+      class: "btn btn-outline-danger", data: {turbo_confirm: "Clear completed storage activity and health history? In-progress entries, storage sources and library files will be kept."} %>
+  </div>
+  <div class="border rounded" style="max-height: 480px; overflow: auto;" tabindex="0" role="region" aria-label="Storage activity entries">
+    <% if @activity_page.items.any? %>
+      <%= render "admin/file_storage/storage_source_statuses", statuses: @activity_page.items %>
+    <% else %><p class="text-muted p-3 mb-0">No storage activity to display.</p><% end %>
+  </div>
+  <nav class="d-flex justify-content-between align-items-center mt-3" aria-label="Storage activity pages">
+    <% query = request.query_parameters.except("activity_page") %>
+    <div><% if @activity_page.page > 1 %><%= link_to "← Newer", admin_file_storage_path(query.merge(activity_page: @activity_page.page - 1, anchor: "storage-activity")), class: "btn btn-outline-secondary" %><% end %></div>
+    <span class="small text-muted">Page <%= @activity_page.page %> of <%= @activity_page.pages %></span>
+    <div><% if @activity_page.page < @activity_page.pages %><%= link_to "Older →", admin_file_storage_path(query.merge(activity_page: @activity_page.page + 1, anchor: "storage-activity")), class: "btn btn-outline-secondary" %><% end %></div>
+  </nav>
+</section>

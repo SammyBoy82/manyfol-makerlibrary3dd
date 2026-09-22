@@ -164,8 +164,8 @@ gem "better_content_security_policy", "~> 0.1"
 
 gem "devise_zxcvbn", "~> 6.0"
 
-gem "fedipub", "~> 0.9"
-gem "fedipub-moderation", "~> 0.5"
+gem "federails", git: "https://gitlab.com/experimentslabs/federails.git", branch: "main"
+gem "federails-moderation", "~> 0.4"
 gem "caber", github: "manyfold3d/caber"
 gem "fasp_client", "~> 0.6"
 
@@ -213,7 +213,7 @@ gem "altcha-rails", "~> 0.1.0"
 
 gem "reverse_markdown", "~> 3.0"
 
-gem "graphlient", "~> 0.9.0"
+gem "graphlient", "~> 0.8.0"
 
 gem "webmock", "~> 3.26", group: :test
 

@@ -14,6 +14,8 @@ class Search::FilterService
       :link,
       :missingtag,
       :owner,
+      :filetype,
+      :per_page,
       tag: []
     )
     @collection = Collection.find_param(parameter(:collection)) if parameter(:collection).present?
@@ -22,7 +24,7 @@ class Search::FilterService
   end
 
   def any?
-    !@filters.empty?
+    @filters.except(:per_page).present?
   end
 
   def filtering_by?(key)
@@ -46,6 +48,7 @@ class Search::FilterService
     scope = filter_by_collection(scope)
     scope = filter_by_creator(scope)
     scope = filter_by_url(scope)
+    scope = filter_by_filetype(scope)
     filter_by_search(scope)
   end
 
@@ -125,6 +128,31 @@ class Search::FilterService
     else
       scope.where("(select count(*) from links where linkable_id=models.id and linkable_type='Model' and url like ?)>0", "%#{parameter(:link)}%")
     end
+  end
+
+  # Filter models by contained model-file extension.
+  def filter_by_filetype(scope)
+    return scope unless filtering_by?(:filetype)
+
+    extension =
+      parameter(:filetype)
+        .to_s
+        .delete_prefix(".")
+        .downcase
+        .strip
+
+    return scope if extension.blank?
+
+    pattern =
+      "%.#{ActiveRecord::Base.sanitize_sql_like(extension)}"
+
+    scope
+      .joins(:model_files)
+      .where(
+        "model_files.filename ILIKE ?",
+        pattern
+      )
+      .distinct
   end
 
   # Filter by search query

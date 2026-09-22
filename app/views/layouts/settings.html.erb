@@ -86,6 +86,17 @@
       <hr>
       <h5><%= t(".tools_heading") %></h5>
       <ul class="nav flex-column">
+
+        <% if current_user&.is_administrator? %>
+          <li class="nav-item mb-2">
+            <%= link_to(
+              "★ Preview Enrichment",
+              settings_preview_enrichment_candidates_path,
+              class: "nav-link fw-bold text-warning border border-warning rounded px-2 py-2"
+            ) %>
+          </li>
+        <% end %>
+
         <li class="nav-item">
           <%= link_to t("settings.reporting.heading"), reporting_settings_path, class: "nav-link" %>
         </li>
@@ -100,6 +111,98 @@
             <%= link_to t(".pghero"), pg_hero_path, class: "nav-link" %>
           </li>
         <% end %>
+      </ul>
+    <% end %>
+
+    <% if current_user&.is_administrator? %>
+      <hr>
+      <h5>MakerLibrary3D Admin</h5>
+
+      <ul class="nav flex-column">
+
+        <li class="nav-item">
+          <%= link_to "Members",
+                      settings_users_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Invitations",
+                      settings_invitations_path,
+                      class: "nav-link fw-semibold text-primary" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Membership Plans",
+                      settings_membership_plans_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Library Ingestion",
+                      admin_library_ingests_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Catalog Quality",
+                      admin_catalog_quality_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Taxonomy & Catalog",
+                      admin_taxonomy_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Audit Log",
+                      admin_audit_log_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Operations Dashboard",
+                      admin_operations_path,
+                      class: "nav-link" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Control Center",
+                      admin_operations_control_center_path,
+                      class: "nav-link" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Media Maintenance",
+                      admin_media_maintenance_path,
+                      class: "nav-link" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Dead Jobs",
+                      admin_operations_dead_jobs_path,
+                      class: "nav-link" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Storage",
+                      admin_file_storage_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Backup Management",
+                      admin_operations_backups_path,
+                      class: "nav-link fw-semibold text-success" %>
+        </li>
+
+        <li class="nav-item">
+          <%= link_to "Integrity Analyzer",
+                      admin_integrity_path,
+                      class: "nav-link fw-semibold" %>
+        </li>
       </ul>
     <% end %>
   </div>

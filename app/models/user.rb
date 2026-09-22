@@ -13,6 +13,12 @@ class User < ApplicationRecord
 
   DEFAULT_TOUR_STATE = {"completed" => []}
 
+  MEMBERSHIP_STATUSES = %w[
+    active
+    suspended
+  ].freeze
+
+
   # Creator ownership relation used for auto-creation
   has_many :creators, -> { where("caber_relations.permission": "own") }, through: :caber_relations, source_type: "Creator", source: :object
   accepts_nested_attributes_for :creators
@@ -24,7 +30,7 @@ class User < ApplicationRecord
   before_validation :set_json_field_defaults
   before_save :set_quota
 
-  acts_as_fedipub_actor(
+  acts_as_federails_actor(
     username_field: :username,
     name_field: :username,
     user_count_method: :user_count
@@ -45,7 +51,7 @@ class User < ApplicationRecord
       presence: true,
       uniqueness: {case_sensitive: false},
       format: {with: /\A[[:alnum:].\-_;]+\z/},
-      multimodel_uniqueness: {punctuation_sensitive: false, case_sensitive: false, check: FedipubCommon::FEDIVERSE_USERNAMES},
+      multimodel_uniqueness: {punctuation_sensitive: false, case_sensitive: false, check: FederailsCommon::FEDIVERSE_USERNAMES},
       length: SAFE_NAME_LENGTH
     validates :email,
       presence: true,
@@ -73,6 +79,15 @@ class User < ApplicationRecord
 
   validates :landing_page, inclusion: {in: SiteSettings::LANDING_PAGES, allow_nil: true}, if: -> { has_attribute? :landing_page }
 
+
+  validates :membership_status,
+    inclusion: {
+      in: MEMBERSHIP_STATUSES
+    },
+    if: -> {
+      has_attribute?(:membership_status)
+    }
+
   has_many :access_grants, # rubocop:disable Rails/InverseOf
     class_name: "Doorkeeper::AccessGrant",
     foreign_key: :resource_owner_id,
@@ -92,12 +107,17 @@ class User < ApplicationRecord
   has_many :memberships, dependent: :destroy
   has_many :groups, through: :memberships
 
+  belongs_to :membership_plan,
+    optional: true
+
   attr_writer :skip_invitation
+
+  after_invitation_accepted :activate_invited_membership
 
   scope :active, -> { where(invitation_token: nil) }
   scope :invited, -> { where.not(invitation_token: nil) }
 
-  def fedipub_name
+  def federails_name
     username
   end
 
@@ -139,6 +159,55 @@ class User < ApplicationRecord
 
   def is_member?
     has_any_role_of? :administrator, :moderator, :contributor, :member
+  end
+
+
+  def membership_expired?
+    return false if is_administrator?
+    return false unless has_attribute?(:membership_expires_at)
+    return false if membership_expires_at.blank?
+
+    membership_expires_at <= Time.current
+  end
+
+  def effective_membership_status
+    return "active" if is_administrator?
+    return "expired" if membership_expired?
+
+    membership_status.presence || "active"
+  end
+
+  def membership_access_active?
+    return true if is_administrator?
+
+    approved? &&
+      effective_membership_status == "active"
+  end
+
+
+  def entitled_to_library?(library)
+    return true if is_moderator?
+    return false unless membership_access_active?
+
+    plan =
+      membership_plan
+
+    return false unless plan&.active?
+
+    plan.grants_library?(library)
+  end
+
+  def entitled_library_ids
+    return Library.pluck(:id) if is_moderator?
+
+    plan =
+      membership_plan
+
+    return [] unless membership_access_active?
+    return [] unless plan&.active?
+    return Library.pluck(:id) if plan.all_libraries?
+
+    plan.library_ids
   end
 
   def problem_severity(category)
@@ -184,7 +253,9 @@ class User < ApplicationRecord
 
   # Devise approval checks
   def active_for_authentication?
-    super && approved?
+    super &&
+      approved? &&
+      membership_access_active?
   end
 
   def inactive_message
@@ -243,7 +314,7 @@ class User < ApplicationRecord
       {email: identifier}
     when /\A(acct:|@)([a-z0-9\-_.]+)(@(.*))?\z/io
       if SiteSettings.federation_enabled?
-        actor = Fedipub::Actor.find_by_account(identifier) # rubocop:disable Rails/DynamicFindBy
+        actor = Federails::Actor.find_by_account(identifier) # rubocop:disable Rails/DynamicFindBy
         {id: actor&.entity&.id}
       else
         scope = scope.none
@@ -261,10 +332,10 @@ class User < ApplicationRecord
     end
   end
 
-  def self.invite!(params)
-    options = params
-    options[:username] ||= "invite_#{SecureRandom.hex(8)}"
-    super(options)
+  def self.invite!(params, invited_by = nil, options = {})
+    attributes = params.to_h.symbolize_keys
+    attributes[:username] ||= "invite_#{SecureRandom.hex(8)}"
+    super(attributes, invited_by, options)
   end
 
   def liked_list
@@ -278,6 +349,44 @@ class User < ApplicationRecord
   memo_wise :liked?
 
   private
+
+  def activate_invited_membership
+    updates = {}
+
+    updates[:approved] = true unless approved?
+
+    if has_attribute?(:membership_status) &&
+        membership_status != "active"
+      updates[:membership_status] = "active"
+    end
+
+    if has_attribute?(:membership_started_at) &&
+        membership_started_at.blank?
+      updates[:membership_started_at] = Time.current
+    end
+
+    if updates.any?
+      update_columns(
+        updates.merge(updated_at: Time.current)
+      )
+    end
+
+    AdminAudit.record(
+      actor: self,
+      action: "membership_invitation_accepted",
+      target: self,
+      after_data: {
+        username: username,
+        roles: roles.pluck(:name).sort,
+        membership_plan_id: membership_plan_id,
+        membership_plan: membership_plan&.name,
+        membership_status: membership_status,
+        membership_started_at: membership_started_at&.iso8601,
+        membership_expires_at: membership_expires_at&.iso8601,
+        invitation_accepted_at: invitation_accepted_at&.iso8601
+      }
+    )
+  end
 
   def set_quota
     attributes["quota"] = SiteSettings.default_user_quota if try(:quota_use_site_default)

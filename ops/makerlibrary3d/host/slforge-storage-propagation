@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+ROOT="/srv/slforge/storage-sources"
+
+mkdir -p "$ROOT"
+
+# Create a dedicated self-bind mount only if one does not already exist.
+if ! findmnt -rn -M "$ROOT" >/dev/null 2>&1; then
+    mount --bind "$ROOT" "$ROOT"
+fi
+
+# Child mounts must propagate to Docker.
+mount --make-rshared "$ROOT"
+
+echo "storage_root=$ROOT"
+findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS,PROPAGATION "$ROOT"

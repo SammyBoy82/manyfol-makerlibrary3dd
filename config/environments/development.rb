@@ -7,7 +7,7 @@ Rails.application.configure do
   config.enable_reloading = true
 
   # Eager load code on boot if we're in federation mode
-  # otherwise models don't necessarily get registered with fedipub
+  # otherwise models don't necessarily get registered with federails
   # to recieve messages
   config.eager_load = config.manyfold_features[:federation]
 

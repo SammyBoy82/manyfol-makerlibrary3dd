@@ -1,0 +1,11 @@
+[Unit]
+Description=Run MakerLibrary3D Storage Health Check
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

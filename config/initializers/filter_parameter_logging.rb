@@ -6,3 +6,7 @@
 Rails.application.config.filter_parameters += [
   :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc
 ]
+
+Rails.application.config.filter_parameters += [:password, :account_key, :sas_token, :credential]
+
+Rails.application.config.filter_parameters += [:azure_connect_script, :connect_script]

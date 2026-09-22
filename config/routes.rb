@@ -1,8 +1,12 @@
 require "sidekiq/web"
 require "sidekiq/cron/web"
-require "fedipub"
+require "federails"
 
 Rails.application.routes.draw do
+  post "/admin/file-storage/clear-storage-activity", to: "admin/file_storage#clear_storage_activity", as: :clear_storage_activity
+  post "/admin/file-storage/storage-sources/:slug/register-library", to: "admin/file_storage#register_storage_library", as: :register_v491_storage_library
+  post "/admin/file-storage/storage-sources/:slug/reconnect-v491", to: "admin/file_storage#reconnect_storage_source", as: :reconnect_v491_storage_source
+  post "/admin/file-storage/storage-sources/:slug/disconnect-v491", to: "admin/file_storage#disconnect_storage_source", as: :disconnect_v491_storage_source
   draw(:auth)
   draw(:meta)
   draw(:admin)

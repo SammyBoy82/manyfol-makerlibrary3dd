@@ -18,7 +18,28 @@ module ModelListable
     @unrelated_tag_count = nil unless @filter.any?
 
     page = params[:page] || 1
-    @models = @models.page(page).per(helpers.pagination_settings["per_page"])
+
+    allowed_per_page = [24, 48, 100]
+
+    requested_per_page =
+      params[:per_page].to_i
+
+    saved_per_page =
+      helpers.pagination_settings["per_page"].to_i
+
+    @per_page =
+      if allowed_per_page.include?(requested_per_page)
+        requested_per_page
+      elsif allowed_per_page.include?(saved_per_page)
+        saved_per_page
+      else
+        48
+      end
+
+    @models =
+      @models
+        .page(page)
+        .per(@per_page)
 
     # Load extra data
     @models = @models.includes [:creator, :collections]

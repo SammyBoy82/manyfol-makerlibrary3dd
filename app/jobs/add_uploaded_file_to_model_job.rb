@@ -15,6 +15,12 @@ class AddUploadedFileToModelJob < ApplicationJob
       else
         file.parse_metadata_later
       end
+
+      LibraryIngestion::UploadTracker.record(
+        model: model,
+        file: file,
+        tus_upload: tus_upload
+      )
     end
 
     model.check_for_problems_later

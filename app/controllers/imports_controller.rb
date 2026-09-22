@@ -3,10 +3,16 @@ class ImportsController < ApplicationController
   before_action :get_url
 
   def new
+    authorize :upload, :create?
   end
 
   def create
-    CreateObjectFromUrlJob.perform_later(url: @url, owner: current_user)
+    authorize :upload, :create?
+
+    CreateObjectFromUrlJob.perform_later(
+      url: @url,
+      owner: current_user
+    )
     redirect_to helpers.landing_page_path, notice: t(".success")
   end
 

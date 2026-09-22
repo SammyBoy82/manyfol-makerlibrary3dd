@@ -1,6 +1,10 @@
 class ModelFilesController < ApplicationController
   include ActionController::Live
 
+  # MakerLibrary3D signed file URLs identify a file but do not grant
+  # anonymous access. The member must still be authenticated.
+  before_action :authenticate_user!
+
   rate_limit to: 10, within: 3.minutes, only: :create
 
   before_action :get_model
@@ -178,14 +182,20 @@ class ModelFilesController < ApplicationController
       @file = scope.find_by!(filename: [params[:id], params[:format]].join("."))
       request.format = params[:format].downcase
     end
-    # Check for signed download URLs
+    # Check for signed download URLs.
+    #
+    # MakerLibrary3D is members-only, so a valid signature must not
+    # bypass membership, lifecycle, or plan/library entitlement checks.
     if has_signed_id?
-      @signed_file = @model.model_files.find_signed!(params[:sig], purpose: "download")
-      if @file == @signed_file
-        skip_authorization
-      else
-        raise ActiveRecord::RecordNotFound
-      end
+      @signed_file =
+        @model.model_files.find_signed!(
+          params[:sig],
+          purpose: "download"
+        )
+
+      raise ActiveRecord::RecordNotFound unless @file == @signed_file
+
+      authorize @file, :show?
     else
       authorize @file
     end

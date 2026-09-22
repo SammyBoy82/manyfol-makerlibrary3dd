@@ -1,7 +1,16 @@
 class ModelFilePolicy < ApplicationPolicy
   def show?
+    return false unless @user
+    return true if @user.is_moderator?
+    return false unless @user.membership_access_active?
     return false unless ModelPolicy.new(@user, @record.model).show?
-    @user&.is_moderator? || @record.previewable? || check_permissions(@record.model, ["view", "edit", "own"], @user)
+
+    @record.previewable? ||
+      check_permissions(
+        @record.model,
+        ["view", "edit", "own"],
+        @user
+      )
   end
 
   def raw?
@@ -18,7 +27,8 @@ class ModelFilePolicy < ApplicationPolicy
   end
 
   def create?
-    can_update_model?
+    @user&.is_contributor? &&
+      can_update_model?
   end
 
   def convert?
@@ -46,16 +56,57 @@ class ModelFilePolicy < ApplicationPolicy
 
     def resolve
       return scope if @user&.is_moderator?
-      subject_list = [nil, user, user&.roles].flatten
-      scope
-        # Where the user only has preview permissions, then show previewable files
-        .where(previewable: true)
-        .where(model: Model.granted_to("preview", subject_list))
-        .where.not(model: Model.granted_to(FULL_VIEW_PERMISSIONS, subject_list))
-        # Otherwise, show files where the user has full view permissions on the model
-        .or(
-          scope.where(model: Model.granted_to(FULL_VIEW_PERMISSIONS, subject_list))
-        )
+      return scope.none unless @user
+      return scope.none unless @user.membership_access_active?
+
+      subject_list =
+        [
+          nil,
+          user,
+          user&.roles
+        ].flatten
+
+      result =
+        scope
+          .where(previewable: true)
+          .where(
+            model:
+              Model.granted_to(
+                "preview",
+                subject_list
+              )
+          )
+          .where.not(
+            model:
+              Model.granted_to(
+                FULL_VIEW_PERMISSIONS,
+                subject_list
+              )
+          )
+          .or(
+            scope.where(
+              model:
+                Model.granted_to(
+                  FULL_VIEW_PERMISSIONS,
+                  subject_list
+                )
+            )
+          )
+
+      plan =
+        @user.membership_plan
+
+      return result.none unless plan&.active?
+      return result if plan.all_libraries?
+
+      result.where(
+        model_id:
+          Model
+            .where(
+              library_id: plan.library_ids
+            )
+            .select(:id)
+      )
     end
   end
 

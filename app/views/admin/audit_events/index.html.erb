@@ -1,0 +1,130 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">Admin Audit Log</h2>
+    <p class="text-muted mb-0">
+      Append-only record of MakerLibrary3D administrative actions.
+    </p>
+  </div>
+
+  <span class="badge text-bg-secondary">
+    <%= AdminAuditEvent.count %> events
+  </span>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <%= form_with url: admin_audit_log_path,
+                  method: :get,
+                  local: true,
+                  class: "row g-2" do %>
+
+      <div class="col-md-5">
+        <%= text_field_tag :q,
+              params[:q],
+              placeholder: "Search actor, target or action",
+              class: "form-control" %>
+      </div>
+
+      <div class="col-md-4">
+        <%= select_tag :action_type,
+              options_for_select(
+                @action_types,
+                params[:action_type]
+              ),
+              include_blank: "All actions",
+              class: "form-select" %>
+      </div>
+
+      <div class="col-md-3">
+        <%= submit_tag "Filter",
+              class: "btn btn-primary me-1" %>
+
+        <%= link_to "Clear",
+              admin_audit_log_path,
+              class: "btn btn-outline-secondary" %>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Administrator</th>
+          <th>Action</th>
+          <th>Target</th>
+          <th>IP</th>
+          <th>Changes</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% @events.each do |event| %>
+          <tr>
+            <td class="text-nowrap">
+              <%= l(event.created_at, format: :short) %>
+            </td>
+
+            <td>
+              <%= event.actor_name %>
+            </td>
+
+            <td>
+              <span class="badge text-bg-secondary">
+                <%= event.action.humanize %>
+              </span>
+            </td>
+
+            <td>
+              <strong><%= event.target_name || "—" %></strong>
+
+              <% if event.target_type.present? %>
+                <div class="small text-muted">
+                  <%= event.target_type %>
+                  #<%= event.target_id %>
+                </div>
+              <% end %>
+            </td>
+
+            <td class="small">
+              <%= event.ip_address || "—" %>
+            </td>
+
+            <td>
+              <% if event.before_data.present? || event.after_data.present? %>
+                <details>
+                  <summary>View changes</summary>
+
+                  <div class="small mt-2">
+                    <strong>Before</strong>
+                    <pre class="mb-2"><%= JSON.pretty_generate(event.before_data) %></pre>
+
+                    <strong>After</strong>
+                    <pre class="mb-0"><%= JSON.pretty_generate(event.after_data) %></pre>
+                  </div>
+                </details>
+              <% else %>
+                —
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+
+        <% if @events.empty? %>
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              No audit events recorded yet.
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mt-3">
+  <%= paginate @events %>
+</div>

@@ -1,0 +1,6 @@
+MakerLibrary3D release: v4.9.1
+Production image: slforge/manyfold-makerlibrary3d:0.147.1-storage-v4.9.1
+Production host: DuckerHost
+Accepted UTC: 2026-09-14
+Storage propagation: rshared
+Azure Files validation: 15 models, 30 ModelFile records

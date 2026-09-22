@@ -1,0 +1,217 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1 class="h3 mb-1">Commercial Metadata</h1>
+      <p class="text-muted mb-0">MakerLibrary3D sales, membership, storefront readiness and publication control layered on top of the Manyfold catalogue.</p>
+    </div>
+    <%= link_to "Back to Settings", settings_path, class: "btn btn-outline-secondary" %>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Phase 5.4 publication gate + catalogue API.</strong>
+    <strong>Storefront Ready</strong> means the model passes technical/commercial checks. <strong>Published</strong> is the separate administrator approval gate. The catalogue API exports only models that are both Published and Storefront Ready.
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Catalogue Models</div><div class="display-6"><%= @stats[:models] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Configured</div><div class="display-6"><%= @stats[:configured] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Published</div><div class="display-6"><%= @stats[:published] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100"><div class="card-body"><div class="text-muted small">Physical Sale</div><div class="display-6"><%= @stats[:physical] %></div></div></div></div>
+    <div class="col-md-2"><div class="card h-100 border-success"><div class="card-body"><div class="text-muted small">Storefront Ready</div><div class="display-6"><%= @stats[:shown_storefront_ready] %></div><div class="small text-muted">shown rows</div></div></div></div>
+    <div class="col-md-2"><div class="card h-100 border-warning"><div class="card-body"><div class="text-muted small">Needs Attention</div><div class="display-6"><%= @stats[:shown_attention] %></div><div class="small text-muted">shown rows</div></div></div></div>
+  </div>
+
+  <%= form_with url: admin_commercial_metadata_path, method: :get, local: true, class: "row g-2 mb-4" do %>
+    <div class="col-lg-5">
+      <%= text_field_tag :q, @query, class: "form-control", placeholder: "Search model name" %>
+    </div>
+    <div class="col-lg-3">
+      <%= select_tag :library_id,
+            options_from_collection_for_select(@libraries, :id, :name, @library_id),
+            include_blank: "All libraries",
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-2">
+      <%= select_tag :channel,
+            options_for_select([
+              ["All channels", ""],
+              ["Member download", "member"],
+              ["Digital sale", "digital"],
+              ["Physical sale", "physical"],
+              ["Custom quote", "quote"],
+              ["Featured", "featured"],
+              ["Published", "published"]
+            ], @channel),
+            class: "form-select" %>
+    </div>
+    <div class="col-lg-2 d-grid">
+      <%= submit_tag "Filter", class: "btn btn-primary" %>
+    </div>
+  <% end %>
+
+  <%= form_with url: admin_commercial_metadata_bulk_update_path, method: :post, local: true do %>
+    <%= hidden_field_tag :q, @query %>
+    <%= hidden_field_tag :library_id, @library_id %>
+    <%= hidden_field_tag :channel, @channel %>
+
+    <div class="card border-primary mb-3">
+      <div class="card-header"><strong>Bulk actions for selected models</strong></div>
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-lg-5">
+            <label class="form-label">Action</label>
+            <%= select_tag :bulk_action,
+                  options_for_select([
+                    ["Member download — ON", "member_on"],
+                    ["Member download — OFF", "member_off"],
+                    ["Set digital price", "set_digital_price"],
+                    ["Digital sale — ON (requires price)", "digital_on"],
+                    ["Digital sale — OFF", "digital_off"],
+                    ["Set physical from-price", "set_physical_price"],
+                    ["Physical sale — ON (requires price)", "physical_on"],
+                    ["Physical sale — OFF", "physical_off"],
+                    ["Custom quote — ON", "quote_on"],
+                    ["Custom quote — OFF", "quote_off"],
+                    ["Featured — ON", "featured_on"],
+                    ["Featured — OFF", "featured_off"],
+                    ["Storefront Published — ON", "publish_on"],
+                    ["Storefront Published — OFF", "publish_off"],
+                    ["Set production lead time (days)", "set_lead_time"]
+                  ]),
+                  class: "form-select" %>
+          </div>
+          <div class="col-lg-3">
+            <label class="form-label">Value <span class="text-muted">(only when required)</span></label>
+            <%= text_field_tag :bulk_value, nil, class: "form-control", placeholder: "e.g. 29.95 or 3" %>
+          </div>
+          <div class="col-lg-2 d-grid">
+            <%= submit_tag "Apply to Selected", class: "btn btn-primary" %>
+          </div>
+          <div class="col-lg-2 d-grid">
+            <%= submit_tag "Generate SKU for Selected",
+                  formaction: admin_commercial_metadata_generate_skus_path,
+                  class: "btn btn-outline-success" %>
+          </div>
+        </div>
+        <div class="small text-muted mt-2">Publishing does not bypass readiness. A published but blocked model is still excluded from the API.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width:45px;"><input type="checkbox" id="select-commercial-all" aria-label="Select all shown"></th>
+              <th>Model</th>
+              <th>Library</th>
+              <th>SKU</th>
+              <th>Readiness</th>
+              <th>Published</th>
+              <th>Member</th>
+              <th>Digital</th>
+              <th>Physical</th>
+              <th>Quote</th>
+              <th>Price</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @models.each do |model| %>
+              <% meta = @metadata_by_model[model.id] %>
+              <% ready = @readiness_by_model[model.id] %>
+              <tr>
+                <td><%= check_box_tag "model_ids[]", model.id, false, class: "commercial-model-checkbox" %></td>
+                <td>
+                  <strong><%= model.name %></strong>
+                  <div class="small text-muted">Model #<%= model.id %></div>
+                </td>
+                <td><%= model.library&.name %></td>
+                <td><code><%= meta&.sku || "—" %></code></td>
+                <td style="min-width:170px;">
+                  <% score_class = ready.score == 100 ? "bg-success" : (ready.score >= 70 ? "bg-warning text-dark" : "bg-danger") %>
+                  <span class="badge <%= score_class %>"><%= ready.score %>%</span>
+                  <% if ready.storefront.ready %>
+                    <span class="badge bg-success">Storefront ready</span>
+                  <% elsif ready.storefront.enabled %>
+                    <span class="badge bg-warning text-dark">Storefront blocked</span>
+                  <% else %>
+                    <span class="badge bg-secondary">Not for storefront</span>
+                  <% end %>
+
+                  <% blockers = [ready.member, ready.digital, ready.physical, ready.quote, ready.storefront].select(&:enabled).flat_map(&:blockers).uniq %>
+                  <% if blockers.any? %>
+                    <details class="small mt-1">
+                      <summary class="text-warning">Why not ready?</summary>
+                      <ul class="mb-0 ps-3">
+                        <% blockers.each do |blocker| %><li><%= blocker %></li><% end %>
+                      </ul>
+                    </details>
+                  <% end %>
+                </td>
+                <td>
+                  <% if meta&.storefront_published? %>
+                    <span class="badge <%= ready.storefront.ready ? 'bg-primary' : 'bg-warning text-dark' %>"><%= ready.storefront.ready ? 'Published' : 'Published / blocked' %></span>
+                  <% else %>
+                    <span class="badge bg-secondary">Draft</span>
+                  <% end %>
+                </td>
+                <td>
+                  <% if ready.member.enabled %>
+                    <span class="badge <%= ready.member.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.member.ready ? 'Ready' : 'Blocked' %></span>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
+                </td>
+                <td>
+                  <% if ready.digital.enabled %>
+                    <span class="badge <%= ready.digital.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.digital.ready ? 'Ready' : 'Blocked' %></span>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
+                </td>
+                <td>
+                  <% if ready.physical.enabled %>
+                    <span class="badge <%= ready.physical.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.physical.ready ? 'Ready' : 'Blocked' %></span>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
+                </td>
+                <td>
+                  <% if ready.quote.enabled %>
+                    <span class="badge <%= ready.quote.ready ? 'bg-success' : 'bg-danger' %>"><%= ready.quote.ready ? 'Ready' : 'Blocked' %></span>
+                  <% else %><span class="badge bg-secondary">Off</span><% end %>
+                </td>
+                <td>
+                  <% if meta&.digital_sale_enabled? %><div>Digital: <%= number_to_currency(meta.digital_price, unit: "$", precision: 2) %></div><% end %>
+                  <% if meta&.physical_sale_enabled? %><div>Physical from: <%= number_to_currency(meta.physical_from_price, unit: "$", precision: 2) %></div><% end %>
+                  <% unless meta&.digital_sale_enabled? || meta&.physical_sale_enabled? %><span class="text-muted">—</span><% end %>
+                </td>
+                <td><%= link_to "Edit", edit_admin_commercial_metadata_path(model_id: model.id), class: "btn btn-sm btn-outline-primary" %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
+    <%= button_to "Generate Missing SKUs for Entire Catalogue",
+          admin_commercial_metadata_generate_skus_path,
+          method: :post,
+          params: {q: @query, library_id: @library_id, channel: @channel},
+          class: "btn btn-outline-success",
+          data: {turbo_confirm: "Generate deterministic SKUs for every catalogue model that does not already have one? Existing SKUs will not change."} %>
+    <code>/api/makerlibrary3d/v1/catalog</code>
+    <span class="small text-muted">API returns only Published + Storefront Ready models. Internal commercial notes are excluded.</span>
+  </div>
+
+  <% if @models.empty? %><div class="alert alert-light border mt-3">No catalogue models match the current filter.</div><% end %>
+</div>
+
+<script>
+  (() => {
+    const all = document.getElementById("select-commercial-all");
+    if (!all) return;
+    all.addEventListener("change", () => {
+      document.querySelectorAll(".commercial-model-checkbox").forEach((box) => {
+        box.checked = all.checked;
+      });
+    });
+  })();
+</script>

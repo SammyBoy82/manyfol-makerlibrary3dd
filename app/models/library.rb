@@ -21,7 +21,9 @@ class Library < ApplicationRecord
 
   normalizes :path, with: ->(path) do
     Pathname.new(path.strip).realpath.to_s
-  rescue Errno::ENOENT, Errno::EACCES # carry on, we validate these later
+  rescue SystemCallError, IOError
+    # Preserve the configured path when filesystem-backed storage is
+    # temporarily unavailable, such as an offline BlobFuse mount.
     path.strip
   end
 
@@ -65,6 +67,15 @@ class Library < ApplicationRecord
     else
       raise "Invalid storage service: #{storage_service}"
     end
+  rescue SystemCallError, IOError => error
+    Rails.logger.warn(
+      "[StorageOffline] " \
+      "library_id=#{id.inspect} " \
+      "name=#{name.inspect} " \
+      "path=#{path.inspect} " \
+      "error=#{error.class}: #{error.message}"
+    )
+    false
   end
 
   def free_space
@@ -116,7 +127,19 @@ class Library < ApplicationRecord
   end
 
   def self.register_all_storage
-    find_each(&:register_storage)
+    find_each do |library|
+      begin
+        library.register_storage
+      rescue SystemCallError => e
+        Rails.logger.error(
+          "[StorageFaultIsolation] " \
+          "Skipping unavailable library id=#{library.id} " \
+          "name=#{library.name.inspect} " \
+          "path=#{library.path.inspect} " \
+          "error=#{e.class}: #{e.message}"
+        )
+      end
+    end
   rescue ActiveRecord::StatementInvalid, NameError
     nil # migrations probably haven't run yet to create library table
   end

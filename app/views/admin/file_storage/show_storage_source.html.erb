@@ -1,0 +1,341 @@
+<% managed = begin; Admin::ManagedStorageSource.fetch(@storage_source.key); rescue ArgumentError, KeyError, JSON::ParserError, SystemCallError; nil; end %>
+<% if managed %>
+  <div class="card border-primary mb-4"><div class="card-body">
+    <h2 class="h5">Library & connection</h2>
+    <p class="text-muted">Register a writable library after mounting. Scanning remains a separate step.</p>
+    <div class="d-flex flex-wrap gap-2">
+      <% if @attached_libraries.empty? && managed["connected"] && !managed["read_only"] %>
+        <%= button_to "Register Library · No Scan", register_v491_storage_library_path(@storage_source.key), method: :post, class: "btn btn-primary" %>
+      <% end %>
+      <% if @attached_libraries.empty? %>
+        <%= button_to "Reconnect", reconnect_v491_storage_source_path(@storage_source.key), method: :post, class: "btn btn-outline-primary" %>
+        <%= button_to "Disconnect", disconnect_v491_storage_source_path(@storage_source.key), method: :post, class: "btn btn-outline-secondary" %>
+      <% end %>
+    </div>
+    <% if managed["read_only"] %><p class="small mt-3 mb-0">Manyfold currently validates libraries as writable. Read-only sources can be tested and mounted, but cannot be registered as libraries.</p><% end %>
+  </div></div>
+<% else %>
+  <div class="alert alert-secondary">Legacy storage is frozen during v4.9.1 development. Changes and connection tests are blocked.</div>
+<% end %>
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="h3 mb-1"><%= @storage_source.name %></h1>
+    <div class="text-muted">Storage Source Management</div>
+  </div>
+
+  <%= link_to "← Back to Storage",
+        admin_file_storage_path,
+        class: "btn btn-outline-secondary" %>
+</div>
+
+<div class="row g-4">
+
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header">
+        <strong>Connection Details</strong>
+      </div>
+
+      <div class="card-body">
+
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Status</dt>
+          <dd class="col-sm-8">
+            <% if @storage_source.available %>
+              <span class="badge bg-success">Online</span>
+            <% else %>
+              <span class="badge bg-danger">Offline</span>
+            <% end %>
+
+            <% if @storage_source.readable %>
+              <span class="badge bg-success">Read</span>
+            <% end %>
+
+            <% if @storage_source.writable %>
+              <span class="badge bg-success">Write</span>
+            <% else %>
+              <span class="badge bg-secondary">Read Only</span>
+            <% end %>
+          </dd>
+
+          <dt class="col-sm-4">Type</dt>
+          <dd class="col-sm-8"><%= @storage_source.kind %></dd>
+
+          <dt class="col-sm-4">Source Key</dt>
+          <dd class="col-sm-8"><code><%= @storage_source.key %></code></dd>
+
+          <dt class="col-sm-4">Mount Path</dt>
+          <dd class="col-sm-8">
+            <code class="text-break"><%= @storage_source.container_path %></code>
+          </dd>
+
+          <% if @storage_source.account_name.present? %>
+            <dt class="col-sm-4">Azure Account</dt>
+            <dd class="col-sm-8"><%= @storage_source.account_name %></dd>
+
+            <dt class="col-sm-4">Container</dt>
+            <dd class="col-sm-8"><%= @storage_source.container_name %></dd>
+          <% end %>
+
+          <dt class="col-sm-4">Folders</dt>
+          <dd class="col-sm-8"><%= number_with_delimiter(@storage_source.folder_count) %></dd>
+
+          <dt class="col-sm-4">Registered Models</dt>
+          <dd class="col-sm-8"><%= number_with_delimiter(@storage_source.models) %></dd>
+
+          <dt class="col-sm-4">Registered Files</dt>
+          <dd class="col-sm-8"><%= number_with_delimiter(@storage_source.files) %></dd>
+
+          <dt class="col-sm-4">Registered Size</dt>
+          <dd class="col-sm-8"><%= number_to_human_size(@storage_source.registered_bytes) %></dd>
+        </dl>
+
+      </div>
+    </div>
+  </div>
+
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">
+        <strong>Health & Actions</strong>
+      </div>
+
+      <div class="card-body">
+
+        <% if managed %>
+          <div class="mb-4">
+            <div class="small text-muted mb-2">
+              Display Name
+            </div>
+
+            <%= form_with url: rename_admin_storage_source_path(@storage_source.key),
+                  method: :patch,
+                  local: true,
+                  class: "d-flex gap-2" do %>
+
+              <%= text_field_tag :display_name,
+                    @storage_source.name,
+                    maxlength: 80,
+                    required: true,
+                    class: "form-control" %>
+
+              <%= submit_tag "Rename",
+                    class: "btn btn-outline-primary" %>
+
+            <% end %>
+          </div>
+
+          <hr>
+        <% end %>
+
+        <% if @storage_status %>
+          <div class="mb-3">
+            <div class="small text-muted">Last Health Result</div>
+            <strong><%= @storage_status.state.to_s.humanize %></strong>
+
+            <% if @storage_status.message.present? %>
+              <div class="small mt-1"><%= @storage_status.message %></div>
+            <% end %>
+
+            <% if @storage_status.updated_at %>
+              <div class="small text-muted mt-1">
+                <%= @storage_status.updated_at %>
+              </div>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="text-muted mb-3">
+            No recorded health result yet.
+          </div>
+        <% end %>
+
+        <div class="d-grid gap-2">
+
+          <%= button_to "Test Connection",
+                test_admin_storage_source_path(@storage_source.key),
+                method: :post,
+                class: "btn btn-primary" %>
+
+          <%= link_to "Refresh Status",
+                manage_admin_storage_source_path(@storage_source.key),
+                class: "btn btn-outline-secondary" %>
+
+          <% if !managed %>
+
+            <button class="btn btn-outline-secondary" disabled>
+              Protected System Storage
+            </button>
+
+          <% elsif @attached_libraries.any? %>
+
+            <button class="btn btn-outline-danger" disabled>
+              Remove Blocked — <%= @attached_libraries.count %>
+              Attached <%= "Library".pluralize(@attached_libraries.count) %>
+            </button>
+
+          <% else %>
+
+            <%= button_to "Remove Storage Source",
+                  admin_storage_source_path(@storage_source.key),
+                  method: :delete,
+                  class: "btn btn-outline-danger",
+                  form: {
+                    data: {
+                      turbo_confirm:
+                        "Remove this storage source? Stored Azure data will NOT be deleted."
+                    }
+                  } %>
+
+          <% end %>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<div class="card mt-4">
+
+  <div class="card-header d-flex justify-content-between">
+    <strong>Attached Manyfold Libraries</strong>
+
+    <span class="badge bg-secondary">
+      <%= @attached_libraries.count %>
+    </span>
+  </div>
+
+  <% if @attached_libraries.any? %>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+
+        <thead>
+          <tr>
+            <th>Library</th>
+            <th>Path</th>
+            <th>Models</th>
+            <th>Files</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% @attached_libraries.each do |library| %>
+            <tr>
+              <td><strong><%= library.name %></strong></td>
+
+              <td>
+                <code class="text-break"><%= library.path %></code>
+              </td>
+
+              <td>
+                <%= number_with_delimiter(library.models.count) %>
+              </td>
+
+              <td>
+                <%= number_with_delimiter(
+                      ModelFile.joins(:model)
+                        .where(models: {library_id: library.id})
+                        .count
+                    ) %>
+              </td>
+
+              <td class="text-end">
+                <%= link_to "Open Library",
+                      library_path(library),
+                      class: "btn btn-sm btn-outline-primary" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+
+      </table>
+    </div>
+
+  <% else %>
+
+    <div class="card-body text-muted">
+      No Manyfold libraries currently use this storage source.
+    </div>
+
+  <% end %>
+
+</div>
+
+
+<div class="card mt-4">
+
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Storage Health History</strong>
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-secondary"><%= @storage_health_history.size %></span>
+      <%= button_to "Clear This History", clear_storage_activity_path(slug: @storage_source.key), method: :post,
+        class: "btn btn-sm btn-outline-danger", data: {turbo_confirm: "Clear completed activity for this source? Storage and library files will be kept."} %>
+    </div>
+  </div>
+
+  <% if @storage_health_history.any? %>
+
+    <div class="table-responsive" style="max-height: 480px; overflow: auto;">
+      <table class="table table-sm table-hover align-middle mb-0">
+
+        <thead>
+          <tr>
+            <th>Result</th>
+            <th>Time</th>
+            <th>Entries</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% @storage_health_history.each do |status| %>
+
+            <tr>
+              <td>
+                <% if status.state == "passed" %>
+                  <span class="badge bg-success">
+                    Passed
+                  </span>
+                <% else %>
+                  <span class="badge bg-danger">
+                    Failed
+                  </span>
+                <% end %>
+              </td>
+
+              <td>
+                <% if status.updated_at %>
+                  <%= status.updated_at.in_time_zone.strftime("%Y-%m-%d %H:%M:%S") %>
+                <% else %>
+                  —
+                <% end %>
+              </td>
+
+              <td>
+                <%= number_with_delimiter(status.top_level_entries.to_i) %>
+              </td>
+
+              <td class="text-break">
+                <%= status.message.presence || status.error.presence || "No details recorded." %>
+              </td>
+            </tr>
+
+          <% end %>
+        </tbody>
+
+      </table>
+    </div>
+
+  <% else %>
+
+    <div class="card-body text-muted">
+      No persistent health tests have been recorded yet.
+    </div>
+
+  <% end %>
+
+</div>

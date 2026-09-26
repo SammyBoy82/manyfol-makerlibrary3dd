@@ -31,6 +31,41 @@ class HomeController < ApplicationController
         )
         .count
 
+    liked_list =
+      current_user.liked_list
+
+    @favorite_models =
+      if liked_list
+        model_scope
+          .joins(:list_items)
+          .where(list_items: {list_id: liked_list.id})
+          .distinct
+          .order("list_items.created_at DESC")
+          .limit(6)
+      else
+        model_scope.none
+      end
+
+    @recent_model_views =
+      ModelView
+        .where(
+          user: current_user,
+          model_id: model_scope.select(:id)
+        )
+        .includes(:model)
+        .recent_first
+        .limit(6)
+
+    @recent_download_events =
+      DownloadEvent
+        .where(
+          user: current_user,
+          model_id: model_scope.select(:id)
+        )
+        .includes(:model, :model_file)
+        .recent_first
+        .limit(6)
+
     @member_role =
       if current_user.is_administrator?
         "Administrator"

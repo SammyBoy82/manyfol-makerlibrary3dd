@@ -153,6 +153,71 @@
   </div>
 
 
+  <div class="row g-3 mb-4">
+
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Favorites</strong>
+          <%= link_to "View All", member_favorites_path, class: "btn btn-sm btn-outline-primary" %>
+        </div>
+        <div class="list-group list-group-flush">
+          <% if @favorite_models.any? %>
+            <% @favorite_models.each do |model| %>
+              <%= link_to model.name, model_path(model), class: "list-group-item list-group-item-action" %>
+            <% end %>
+          <% else %>
+            <div class="list-group-item text-muted">No favorites yet.</div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Recently Viewed</strong>
+          <%= link_to "View All", member_recently_viewed_path, class: "btn btn-sm btn-outline-primary" %>
+        </div>
+        <div class="list-group list-group-flush">
+          <% if @recent_model_views.any? %>
+            <% @recent_model_views.each do |view| %>
+              <%= link_to model_path(view.model), class: "list-group-item list-group-item-action" do %>
+                <div><%= view.model.name %></div>
+                <small class="text-muted"><%= time_ago_in_words(view.last_viewed_at) %> ago</small>
+              <% end %>
+            <% end %>
+          <% else %>
+            <div class="list-group-item text-muted">No recently viewed models.</div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>My Downloads</strong>
+          <%= link_to "View All", member_downloads_path, class: "btn btn-sm btn-outline-primary" %>
+        </div>
+        <div class="list-group list-group-flush">
+          <% if @recent_download_events.any? %>
+            <% @recent_download_events.each do |event| %>
+              <%= link_to model_path(event.model), class: "list-group-item list-group-item-action" do %>
+                <div><%= event.model.name %></div>
+                <small class="text-muted"><%= event.model_file&.filename || event.selection.humanize %></small>
+              <% end %>
+            <% end %>
+          <% else %>
+            <div class="list-group-item text-muted">No downloads recorded.</div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
   <div class="card">
 
     <div class="card-header d-flex justify-content-between align-items-center">

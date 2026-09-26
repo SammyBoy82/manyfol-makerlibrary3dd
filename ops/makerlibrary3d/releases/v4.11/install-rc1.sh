@@ -105,7 +105,7 @@ for command in docker git rsync curl python3 install; do
 done
 
 echo "LOG=$LOG"
-echo "MakerLibrary3D v4.11-rc1 — installer revision 3 — accelerated member-experience release"
+echo "MakerLibrary3D v4.11-rc1 — installer revision 4 — accelerated member-experience release"
 echo
 echo "========== PREFLIGHT =========="
 
@@ -445,6 +445,26 @@ library = Library.create!(
   storage_service: "filesystem"
 )
 
+# Manyfold treats its first account as the bootstrap administrator. Build and
+# complete that lifecycle explicitly so the member fixture below represents a
+# normal established account rather than inheriting first-run setup behavior.
+bootstrap_password = SecureRandom.base64(36)
+bootstrap = User.create!(
+  username: "v411_smoke_bootstrap",
+  email: "v411-smoke-bootstrap@example.com",
+  password: bootstrap_password,
+  password_confirmation: bootstrap_password,
+  approved: true
+)
+bootstrap.add_role(:administrator)
+bootstrap.update_columns(
+  reset_password_token: nil,
+  reset_password_sent_at: nil,
+  updated_at: Time.current
+)
+assert_gate(bootstrap.reload.is_administrator?, "bootstrap administrator role was not assigned")
+assert_gate(!bootstrap.first_use?, "bootstrap fixture remained in first-use setup mode")
+
 password = SecureRandom.base64(36)
 member = User.create!(
   username: "v411_smoke_member",
@@ -521,6 +541,16 @@ session.post(
   }
 )
 assert_gate(session.response.redirect?, "member sign-in failed")
+
+warden_key = session.request.session["warden.user.user.key"]
+signed_in_id = warden_key&.dig(0, 0)
+assert_gate(
+  signed_in_id.to_i == member.id,
+  "unexpected authenticated user; expected=#{member.id}; actual=#{signed_in_id.inspect}"
+)
+signed_in_user = User.find(signed_in_id)
+assert_gate(!signed_in_user.first_use?, "authenticated member entered first-use setup mode")
+puts "INTEGRATION_AUTHENTICATED_MEMBER_GATE=PASS"
 
 session.get("/models/#{model.to_param}")
 assert_http(session, 200, "model page did not return HTTP 200")

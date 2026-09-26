@@ -312,7 +312,6 @@ cat > "$SOURCE/MAKERLIBRARY3D_PROJECT_STATE.md" <<STATE
 
 - Current release: v4.11
 - Image: $FINAL_IMAGE
-- Source commit: $REMOTE_HEAD
 - Release branch: $RELEASE_BRANCH
 - Release tag: $TAG
 - Next branch: $NEXT_BRANCH
@@ -321,8 +320,8 @@ cat > "$SOURCE/MAKERLIBRARY3D_PROJECT_STATE.md" <<STATE
 - Member experience: Favorites, Recently Viewed and My Downloads enabled
 - Invitations and SMTP2GO: enabled
 - Storage Sources: local, Azure Blob, SMB and Azure Files enabled
-- Rollback: sudo bash $RELEASE/rollback.sh
-- Promoted UTC: $STAMP
+- Release reports: /tmp/MakerLibrary3D-*-result-*.txt
+- Rollback scripts: /srv/slforge/releases/makerlibrary3d-*/rollback.sh
 STATE
 chmod 0644 "$SOURCE/MAKERLIBRARY3D_PROJECT_STATE.md"
 

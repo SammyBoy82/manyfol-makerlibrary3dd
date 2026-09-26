@@ -39,7 +39,6 @@ class HomeController < ApplicationController
         model_scope
           .joins(:list_items)
           .where(list_items: {list_id: liked_list.id})
-          .distinct
           .order("list_items.created_at DESC")
           .limit(6)
       else

@@ -64,6 +64,7 @@ class ModelsController < ApplicationController
   def show
     respond_to do |format|
       format.html do
+        ModelView.record!(user: current_user, model: @model) if current_user
         files = policy_scope(@model.model_files).without_special
         @locked_files = @model.model_files.without_special.count - files.count
         @images = files.select(&:is_image?)
@@ -81,6 +82,11 @@ class ModelsController < ApplicationController
         if policy(@model).download?
           download = ArchiveDownloadService.new(model: @model, selection: params[:selection])
           if download.ready?
+            DownloadEvent.record!(
+              user: current_user,
+              model: @model,
+              selection: params[:selection].presence || "all"
+            ) if current_user
             send_file(download.output_file, filename: download.filename, type: :zip, disposition: :attachment)
           elsif download.preparing?
             redirect_to model_path(@model, format: :html), notice: t(".download_preparing")

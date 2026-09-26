@@ -1,0 +1,46 @@
+<div class="container-fluid py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h1 class="mb-1">My Downloads</h1>
+      <p class="text-muted mb-0">Your successful model and file downloads.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <% if @download_events.any? %>
+        <%= button_to "Clear History",
+              member_clear_downloads_path,
+              method: :delete,
+              class: "btn btn-outline-danger",
+              form: {data: {turbo_confirm: "Clear all download history?"}} %>
+      <% end %>
+      <%= link_to "Back to Dashboard", dashboard_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+
+  <% if @download_events.any? %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>File / Selection</th>
+            <th>Downloaded</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @download_events.each do |event| %>
+            <tr>
+              <td><%= event.model.name %></td>
+              <td><%= event.model_file&.filename || event.selection.humanize %></td>
+              <td><%= time_ago_in_words(event.downloaded_at) %> ago</td>
+              <td class="text-end"><%= link_to "Open Model", model_path(event.model), class: "btn btn-sm btn-outline-primary" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    <%= paginate @download_events %>
+  <% else %>
+    <div class="alert alert-info">No downloads have been recorded yet.</div>
+  <% end %>
+</div>

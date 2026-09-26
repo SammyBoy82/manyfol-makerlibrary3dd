@@ -11,7 +11,6 @@ class MemberActivityController < ApplicationController
           .joins(:list_items)
           .where(list_items: {list_id: liked_list.id})
           .includes(:library)
-          .distinct
           .order("list_items.created_at DESC")
           .page(params[:page])
       else

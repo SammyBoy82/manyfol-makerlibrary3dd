@@ -110,6 +110,13 @@ Rails.application.routes.draw do
 
   authenticate :user do
     get "/welcome", to: "home#welcome", as: :welcome
+
+    get "/member/favorites", to: "member_activity#favorites", as: :member_favorites
+    get "/member/recently-viewed", to: "member_activity#recently_viewed", as: :member_recently_viewed
+    get "/member/downloads", to: "member_activity#downloads", as: :member_downloads
+    delete "/member/recently-viewed", to: "member_activity#clear_recently_viewed", as: :member_clear_recently_viewed
+    delete "/member/downloads", to: "member_activity#clear_downloads", as: :member_clear_downloads
+
     resources :lists
     resources :imports, only: [:new, :create]
     resources :scans, only: [:create]

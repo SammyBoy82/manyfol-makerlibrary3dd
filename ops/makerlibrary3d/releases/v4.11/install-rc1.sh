@@ -105,7 +105,7 @@ for command in docker git rsync curl python3 install; do
 done
 
 echo "LOG=$LOG"
-echo "MakerLibrary3D v4.11-rc1 — installer revision 2 — accelerated member-experience release"
+echo "MakerLibrary3D v4.11-rc1 — installer revision 3 — accelerated member-experience release"
 echo
 echo "========== PREFLIGHT =========="
 
@@ -462,9 +462,14 @@ plan = MembershipPlan.create!(
   active: true,
   all_libraries: true
 )
-member.update!(membership_plan: plan)
+member.update!(
+  membership_plan: plan,
+  reset_password_token: nil,
+  reset_password_sent_at: nil
+)
 assert_gate(member.is_member?, "member role was not assigned")
 assert_gate(member.membership_access_active?, "member access is not active")
+assert_gate(!member.reload.first_use?, "member fixture remained in first-use setup mode")
 
 model = Model.create!(
   name: "v4.11 Member Model",

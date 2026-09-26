@@ -105,7 +105,7 @@ for command in docker git rsync curl python3 install; do
 done
 
 echo "LOG=$LOG"
-echo "MakerLibrary3D v4.11-rc1 — accelerated member-experience release"
+echo "MakerLibrary3D v4.11-rc1 — installer revision 2 — accelerated member-experience release"
 echo
 echo "========== PREFLIGHT =========="
 
@@ -419,6 +419,20 @@ def assert_gate(condition, message)
   raise "INTEGRATION_GATE_FAILED: #{message}" unless condition
 end
 
+def assert_http(session, expected, label)
+  return if session.response.status == expected
+
+  body = session.response.body.to_s.gsub(/\s+/, " ")[0, 800]
+  location = session.response.headers["location"]
+  raise [
+    "INTEGRATION_GATE_FAILED: #{label}",
+    "expected=#{expected}",
+    "actual=#{session.response.status}",
+    "location=#{location.inspect}",
+    "body=#{body.inspect}"
+  ].join("; ")
+end
+
 assert_gate(Process.uid == 1500 && Process.gid == 1500, "test must run as runtime UID/GID 1500")
 puts "INTEGRATION_RUNTIME_IDENTITY_GATE=PASS"
 
@@ -464,6 +478,17 @@ other_model = Model.create!(
   library: library
 )
 
+# Caber authorization is independent of membership-plan entitlement. Grant the
+# disposable member access explicitly so the request test exercises v4.11
+# activity tracking instead of depending on the installation's default role.
+model.grant_permission_to("view", member)
+other_model.grant_permission_to("view", member)
+assert_gate(ModelPolicy.new(member, model).show?, "fixture member cannot view the primary model")
+assert_gate(
+  ModelPolicy::Scope.new(member, Model).resolve.exists?(model.id),
+  "primary model is absent from the fixture member policy scope"
+)
+
 member.liked_list.list_items.create!(listable: model)
 
 other_password = SecureRandom.base64(36)
@@ -493,7 +518,7 @@ session.post(
 assert_gate(session.response.redirect?, "member sign-in failed")
 
 session.get("/models/#{model.to_param}")
-assert_gate(session.response.status == 200, "model page did not return HTTP 200")
+assert_http(session, 200, "model page did not return HTTP 200")
 view = ModelView.find_by(user: member, model: model)
 assert_gate(view.present?, "model view was not recorded")
 assert_gate(view.view_count == 1, "first model view count is incorrect")
@@ -505,20 +530,20 @@ assert_gate(view.reload.view_count == 2, "repeat model view was not counted")
 DownloadEvent.record!(user: member, model: model, selection: "all")
 
 session.get("/member/favorites")
-assert_gate(session.response.status == 200, "favorites page did not return HTTP 200")
+assert_http(session, 200, "favorites page did not return HTTP 200")
 assert_gate(session.response.body.include?(model.name), "favorite model was not shown")
 
 session.get("/member/recently-viewed")
-assert_gate(session.response.status == 200, "recently viewed page did not return HTTP 200")
+assert_http(session, 200, "recently viewed page did not return HTTP 200")
 assert_gate(session.response.body.include?(model.name), "recently viewed model was not shown")
 
 session.get("/member/downloads")
-assert_gate(session.response.status == 200, "downloads page did not return HTTP 200")
+assert_http(session, 200, "downloads page did not return HTTP 200")
 assert_gate(session.response.body.include?(model.name), "member download was not shown")
 assert_gate(!session.response.body.include?(other_model.name), "another member's download was exposed")
 
 session.get("/dashboard")
-assert_gate(session.response.status == 200, "member dashboard did not return HTTP 200")
+assert_http(session, 200, "member dashboard did not return HTTP 200")
 assert_gate(session.response.body.include?("Favorites"), "favorites dashboard panel did not render")
 assert_gate(session.response.body.include?("Recently Viewed"), "recently viewed dashboard panel did not render")
 assert_gate(session.response.body.include?("My Downloads"), "downloads dashboard panel did not render")

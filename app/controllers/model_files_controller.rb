@@ -32,6 +32,7 @@ class ModelFilesController < ApplicationController
         format.manyfold_api_v0 { render json: ManyfoldApi::V0::ModelFileSerializer.new(@file).serialize }
         format.any(*MediaType.indexable_types.map(&:to_sym)) do
           attachment = @file.attachment(params[:derivative]) || @file.attachment
+          record_member_download! if params[:download] == "true" && attachment
           send_file_content attachment, derivative: params[:derivative], disposition: (params[:download] == "true") ? :attachment : :inline
         end
       end
@@ -52,7 +53,9 @@ class ModelFilesController < ApplicationController
     authorize @file
     request.format = params[:format].downcase
     respond_to @file.mime_type.to_sym
-    send_file_content @file.attachment, disposition: (params[:download] == "true") ? :attachment : :inline
+    attachment = @file.attachment
+    record_member_download! if params[:download] == "true" && attachment
+    send_file_content attachment, disposition: (params[:download] == "true") ? :attachment : :inline
   end
 
   def create
@@ -143,6 +146,15 @@ class ModelFilesController < ApplicationController
   end
 
   private
+
+  def record_member_download!
+    DownloadEvent.record!(
+      user: current_user,
+      model: @model,
+      model_file: @file,
+      selection: "file"
+    )
+  end
 
   def bulk_update_params
     params.permit(
